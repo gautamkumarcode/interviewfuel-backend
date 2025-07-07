@@ -3,8 +3,7 @@ import {
 	getAnalyticsDashboard,
 	getLeaderboard,
 } from "../controller/analytics-controller.js";
-import auth from "../middleware/auth.js";
-
+import { auth } from "../middleware/auth.js";
 const AnalyticsRouter = express.Router();
 
 AnalyticsRouter.get("/dashboard", auth, getAnalyticsDashboard);

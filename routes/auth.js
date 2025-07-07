@@ -7,11 +7,19 @@ import {
 	logout,
 	register,
 } from "../controller/auth-controller.js";
-import auth from "../middleware/auth.js";
+import { requireRole } from "../middleware/adminAuth.js";
+import { auth } from "../middleware/auth.js";
+import { refreshTokenMiddleware } from "../middleware/refreshToken.js";
 
 const AuthRouter = express.Router();
 
 // Register
+AuthRouter.get("/refresh-token", refreshTokenMiddleware, (req, res) => {
+	res.json({
+		success: true,
+		message: "Access token refreshed",
+	});
+});
 AuthRouter.post(
 	"/register",
 	[
@@ -51,7 +59,7 @@ AuthRouter.post(
 );
 
 // Get current user
-AuthRouter.get("/me", auth, getMe);
+AuthRouter.get("/profile", auth, getMe);
 
 // Logout
 AuthRouter.post("/logout", auth, logout);
@@ -70,5 +78,9 @@ AuthRouter.put(
 	],
 	changePassword
 );
+
+AuthRouter.get("/admin/dashboard", auth, requireRole(["admin"]), (req, res) => {
+	res.json({ message: "Welcome Admin!" });
+});
 
 export default AuthRouter;

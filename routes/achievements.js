@@ -3,7 +3,7 @@ import {
 	checkUserAchievements,
 	getAllAchievements,
 } from "../controller/achievment-controller.js";
-import auth from "../middleware/auth.js";
+import { auth } from "../middleware/auth.js";
 
 const AchievementRouter = express.Router();
 

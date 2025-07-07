@@ -1,12 +1,39 @@
 import { validationResult } from "express-validator";
-import jwt from "jsonwebtoken";
 import User from "../models/User.js";
+import {
+	generateAccessToken,
+	generateRefreshToken,
+} from "../services/jwt-token-services.js";
 
-// JWT generator
-const generateToken = (userId) => {
-	return jwt.sign({ userId }, process.env.JWT_SECRET, {
-		expiresIn: process.env.JWT_EXPIRE || "7d",
-	});
+const sendTokens = (res, user, message, statusCode = 200) => {
+	const accessToken = generateAccessToken(user._id);
+	const refreshToken = generateRefreshToken(user._id);
+
+	const userResponse = user.toObject();
+	delete userResponse.password;
+
+	res.status(statusCode);
+	res
+		.status(200)
+		.cookie("token", accessToken, {
+			httpOnly: true,
+			secure: false, // ❗️set to true only in production with HTTPS
+			sameSite: "lax", // "lax" works locally
+			path: "/", // ✅ needed for middleware to read it
+			maxAge: 15 * 60 * 1000, // 15 mins
+		})
+		.cookie("refreshToken", refreshToken, {
+			httpOnly: true,
+			secure: process.env.NODE_ENV === "production",
+			sameSite: "Lax", // Change to "None" if using cross-site cookies
+			path: "/", // ✅ Required
+			maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+		})
+		.json({
+			success: true,
+			message,
+			data: { user: userResponse },
+		});
 };
 
 export const register = async (req, res) => {
@@ -39,15 +66,7 @@ export const register = async (req, res) => {
 		const user = new User({ name, email, username, password });
 		await user.save();
 
-		const token = generateToken(user._id);
-		const userResponse = user.toObject();
-		delete userResponse.password;
-
-		res.status(201).json({
-			success: true,
-			message: "User registered successfully",
-			data: { user: userResponse, token },
-		});
+		sendTokens(res, user, "User registered successfully", 201);
 	} catch (error) {
 		console.error("Registration error:", error);
 		res
@@ -74,29 +93,27 @@ export const login = async (req, res) => {
 		}).select("+password");
 
 		if (!user || !(await user.comparePassword(password))) {
-			return res.status(401).json({
-				success: false,
-				message: "Invalid credentials",
-			});
+			return res
+				.status(401)
+				.json({ success: false, message: "Invalid credentials" });
 		}
 
 		await user.updateLastActive();
-		const token = generateToken(user._id);
-
-		const userResponse = user.toObject();
-		delete userResponse.password;
-
-		res.json({
-			success: true,
-			message: "Login successful",
-			data: { user: userResponse, token },
-		});
+		sendTokens(res, user, "Login successful");
 	} catch (error) {
 		console.error("Login error:", error);
 		res
 			.status(500)
 			.json({ success: false, message: "Server error during login" });
 	}
+};
+
+export const logout = (req, res) => {
+	res
+		.clearCookie("token")
+		.clearCookie("refreshToken")
+		.status(200)
+		.json({ success: true, message: "Logout successful" });
 };
 
 export const getMe = async (req, res) => {
@@ -114,13 +131,6 @@ export const getMe = async (req, res) => {
 		console.error("Get user error:", error);
 		res.status(500).json({ success: false, message: "Server error" });
 	}
-};
-
-export const logout = (req, res) => {
-	res.json({
-		success: true,
-		message: "Logout successful",
-	});
 };
 
 export const changePassword = async (req, res) => {

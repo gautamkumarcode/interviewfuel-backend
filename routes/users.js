@@ -1,7 +1,7 @@
 import express from "express";
 import { body } from "express-validator";
 import { getProfile, updateProfile } from "../controller/user-controller.js";
-import auth from "../middleware/auth.js";
+import { auth } from "../middleware/auth.js";
 
 const UserRouter = express.Router();
 

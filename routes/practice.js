@@ -7,7 +7,7 @@ import {
 	getUserSessions,
 	submitAnswer,
 } from "../controller/practice-controller.js";
-import auth from "../middleware/auth.js";
+import { auth } from "../middleware/auth.js";
 
 const PracticeRouter = express.Router();
 

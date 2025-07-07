@@ -7,11 +7,12 @@ import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import morgan from "morgan";
 import xss from "xss-clean";
-dotenv.config();
+
 
 // Import routes
 
-import "./database/intialdb.js"; // Ensure this is imported first to set up the database connection
+import cookieParser from "cookie-parser";
+import "./database/intialdb.js";
 import errorHandler from "./middleware/errorHandler.js";
 import notFound from "./middleware/notFound.js";
 import AchievementRouter from "./routes/achievements.js";
@@ -21,18 +22,28 @@ import PracticeRouter from "./routes/practice.js";
 import QuestionsRouter from "./routes/questions.js";
 import UserRouter from "./routes/users.js";
 
+dotenv.config();
 // Initialize express app
 
 const app = express();
+// Middleware to parse cookies
+app.use(cookieParser());
+
+// Set security HTTP headers
+app.disable("x-powered-by");
+app.set("trust proxy", 1); // Trust first proxy for rate limiting
+
+// Enable CORS and set security headers
 
 // Security middleware
 app.use(helmet());
 app.use(
 	cors({
-		origin: "*",
+		origin: "http://localhost:3000", // your frontend origin
 		credentials: true,
 	})
 );
+
 
 // Rate limiting
 const limiter = rateLimit({

@@ -1,6 +1,6 @@
 import express from "express";
 import { body, query } from "express-validator";
-import auth from "../middleware/auth.js";
+import { auth } from "../middleware/auth.js";
 import optionalAuth from "../middleware/optionalAuth.js";
 
 import {

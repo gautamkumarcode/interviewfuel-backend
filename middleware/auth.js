@@ -1,43 +1,35 @@
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 
-const auth = async (req, res, next) => {
+export const auth = async (req, res, next) => {
 	try {
-		const token = req.header("Authorization")?.replace("Bearer ", "");
+		const token = req.cookies.token;
 
 		if (!token) {
 			return res.status(401).json({
 				success: false,
-				message: "No token provided, authorization denied",
+				message: "No token found. Please log in.",
 			});
 		}
 
 		const decoded = jwt.verify(token, process.env.JWT_SECRET);
-		const user = await User.findById(decoded.userId).select("-password");
+		const user = await User.findById(decoded.id).select("-password");
 
 		if (!user) {
 			return res.status(401).json({
 				success: false,
-				message: "Token is not valid",
+				message: "Invalid token or user does not exist.",
 			});
 		}
 
-		if (!user.isActive) {
-			return res.status(401).json({
-				success: false,
-				message: "Account is deactivated",
-			});
-		}
-
+		// Attach user to request
 		req.user = user;
 		next();
 	} catch (error) {
-		console.error("Auth middleware error:", error);
-		res.status(401).json({
+		console.error("Auth Middleware Error:", error);
+		return res.status(401).json({
 			success: false,
-			message: "Token is not valid",
+			message: "Authentication failed.",
 		});
 	}
 };
-
-export default auth;
