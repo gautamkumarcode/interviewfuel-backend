@@ -10,7 +10,7 @@ const questionSchema = new mongoose.Schema(
 		},
 		content: {
 			type: String,
-			required: [true, "Question content is required"],
+			trim: true,
 		},
 		category: {
 			type: mongoose.Schema.Types.ObjectId,
@@ -39,6 +39,16 @@ const questionSchema = new mongoose.Schema(
 				frequency: { type: Number, default: 1 },
 			},
 		],
+		richAnswer: {
+			type: String, // HTML or Markdown
+			required: [true, "Answer explanation is required"],
+		},
+		media: [
+			{
+				type: String, // image or video URL
+				trim: true,
+			},
+		],
 		solutions: [
 			{
 				title: { type: String, required: true },
@@ -63,7 +73,7 @@ const questionSchema = new mongoose.Schema(
 			},
 		],
 		timeLimit: {
-			type: Number, // in minutes
+			type: Number,
 			default: 30,
 		},
 		stats: {
@@ -113,35 +123,33 @@ questionSchema.index({ tags: 1 });
 questionSchema.index({ "stats.views": -1 });
 questionSchema.index({ "stats.likes": -1 });
 questionSchema.index({ createdAt: -1 });
-questionSchema.index({ title: "text", content: "text" });
+questionSchema.index({ title: "text", content: "text", richAnswer: "text" });
 
-// Virtual for difficulty score
+// Virtuals
 questionSchema.virtual("difficultyScore").get(function () {
 	const scores = { Easy: 1, Medium: 2, Hard: 3 };
 	return scores[this.difficulty] || 1;
 });
 
-// Method to increment views
+// Methods
 questionSchema.methods.incrementViews = function () {
 	this.stats.views += 1;
 	return this.save({ validateBeforeSave: false });
 };
 
-// Method to toggle like
 questionSchema.methods.toggleLike = function (increment = true) {
 	this.stats.likes += increment ? 1 : -1;
 	this.stats.likes = Math.max(0, this.stats.likes);
 	return this.save({ validateBeforeSave: false });
 };
 
-// Method to toggle bookmark
 questionSchema.methods.toggleBookmark = function (increment = true) {
 	this.stats.bookmarks += increment ? 1 : -1;
 	this.stats.bookmarks = Math.max(0, this.stats.bookmarks);
 	return this.save({ validateBeforeSave: false });
 };
 
-// Static method to get popular questions
+// Statics
 questionSchema.statics.getPopular = function (limit = 10) {
 	return this.find({ status: "published" })
 		.sort({ "stats.views": -1, "stats.likes": -1 })
@@ -150,9 +158,8 @@ questionSchema.statics.getPopular = function (limit = 10) {
 		.populate("author", "name username");
 };
 
-// Static method to get questions by difficulty
 questionSchema.statics.getByDifficulty = function (difficulty, limit = 20) {
-	return this.find({ difficulty, status: "published" })
+  return this.find({ difficulty, status: "published" })
 		.sort({ createdAt: -1 })
 		.limit(limit)
 		.populate("category", "name")

@@ -8,7 +8,6 @@ import {
 import { adminAuth } from "../middleware/adminAuth.js";
 import { auth } from "../middleware/auth.js";
 
-
 const CategoriesRouter = express.Router();
 
 // Public

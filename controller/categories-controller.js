@@ -46,7 +46,21 @@ export const createCategory = async (req, res) => {
 			});
 		}
 
-		const category = new Category(req.body);
+		const { name, description, color, parentCategory } = req.body;
+
+		const slug = name
+			.toLowerCase()
+			.trim()
+			.replace(/[^a-z0-9]+/g, "-")
+			.replace(/(^-|-$)+/g, "");
+
+		const category = new Category({
+			name,
+			description,
+			color,
+			parentCategory,
+			slug, // include manually generated slug
+		});
 		await category.save();
 
 		res.status(201).json({

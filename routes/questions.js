@@ -4,6 +4,7 @@ import { auth } from "../middleware/auth.js";
 import optionalAuth from "../middleware/optionalAuth.js";
 
 import {
+	createMultipleQuestions,
 	createQuestion,
 	deleteQuestion,
 	getPopularQuestions,
@@ -54,6 +55,21 @@ QuestionsRouter.put(
 		body("difficulty").optional().isIn(["Easy", "Medium", "Hard"]),
 	],
 	updateQuestion
+);
+
+QuestionsRouter.post(
+	"/bulk",
+	auth,
+	[
+		body().isArray({ min: 1 }),
+		body("*.title").trim().isLength({ min: 10, max: 200 }),
+		body("*.content").trim().isLength({ min: 50 }),
+		body("*.category").isMongoId(),
+		body("*.difficulty").isIn(["Easy", "Medium", "Hard"]),
+		body("*.tags").optional().isArray(),
+		body("*.timeLimit").optional().isInt({ min: 1, max: 180 }),
+	],
+	createMultipleQuestions
 );
 
 QuestionsRouter.delete("/:id", auth, deleteQuestion);

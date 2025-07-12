@@ -8,7 +8,6 @@ import helmet from "helmet";
 import morgan from "morgan";
 import xss from "xss-clean";
 
-
 // Import routes
 
 import cookieParser from "cookie-parser";
@@ -43,8 +42,6 @@ app.use(
 		credentials: true,
 	})
 );
-
-
 // Rate limiting
 const limiter = rateLimit({
 	windowMs: 15 * 60 * 1000,
