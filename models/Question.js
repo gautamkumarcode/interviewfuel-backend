@@ -108,6 +108,12 @@ const questionSchema = new mongoose.Schema(
 			type: mongoose.Schema.Types.ObjectId,
 			ref: "User",
 		},
+		slug: {
+			type: String,
+			unique: true,
+			required: [true, "Slug is required"],
+			trim: true,
+		},
 		verifiedAt: Date,
 	},
 	{

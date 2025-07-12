@@ -12,7 +12,8 @@ const sendTokens = (res, user, message, statusCode = 200, minimal = false) => {
 	const userResponse = user.toObject();
 	delete userResponse.password;
 
-	res.status(statusCode)
+	res
+		.status(statusCode)
 		.cookie("token", accessToken, {
 			httpOnly: true,
 			secure: process.env.NODE_ENV === "production",
@@ -33,7 +34,7 @@ const sendTokens = (res, user, message, statusCode = 200, minimal = false) => {
 			data: minimal
 				? {
 						user: {
-							_id: user._id,
+							id: user._id,
 							name: user.name,
 							role: user.role,
 						},

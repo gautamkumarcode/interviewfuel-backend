@@ -4,13 +4,65 @@ import Category from "../models/Category.js";
 // GET /api/categories
 export const getAllCategories = async (req, res) => {
 	try {
-		const categories = await Category.getWithCounts();
-		res.json({ success: true, data: { categories } });
+		const page = parseInt(req.query.page) || 1;
+		const limit = parseInt(req.query.limit) || 10;
+		const skip = (page - 1) * limit;
+
+		// Get total count of categories
+		const totalCountAgg = await Category.aggregate([
+			{
+				$count: "total",
+			},
+		]);
+
+		const total = totalCountAgg[0]?.total || 0;
+		const totalPages = Math.ceil(total / limit);
+
+		// Get paginated categories with counts
+		const categories = await Category.aggregate([
+			{
+				$lookup: {
+					from: "questions",
+					localField: "_id",
+					foreignField: "category",
+					as: "questions",
+				},
+			},
+			{
+				$addFields: {
+					"stats.questionCount": { $size: "$questions" },
+				},
+			},
+			{
+				$project: {
+					questions: 0,
+				},
+			},
+			{
+				$sort: { order: 1, name: 1 },
+			},
+			{ $skip: skip },
+			{ $limit: limit },
+		]);
+
+		res.json({
+			success: true,
+			data: {
+				results: categories,
+				pagination: {
+					current: page,
+					total,
+					totalPages,
+					limit,
+				},
+			},
+		});
 	} catch (error) {
 		console.error("Get categories error:", error);
 		res.status(500).json({ success: false, message: "Server error" });
 	}
 };
+
 
 // GET /api/categories/:slug
 export const getCategoryBySlug = async (req, res) => {

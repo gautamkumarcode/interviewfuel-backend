@@ -77,13 +77,22 @@ export const createQuestion = async (req, res) => {
 
 		const category = await Category.findById(req.body.category);
 		if (!category) {
-			return res.status(400).json({ success: false, message: "Category not found" });
+			return res
+				.status(400)
+				.json({ success: false, message: "Category not found" });
 		}
+
+		const slug = req.body.title
+			.toLowerCase()
+			.trim()
+			.replace(/[^a-z0-9]+/g, "-")
+			.replace(/(^-|-$)+/g, "");
 
 		const question = new Question({
 			...req.body,
 			author: req.user.id,
 			tags: req.body.tags?.map((tag) => tag.trim().toLowerCase()) || [],
+			slug,
 		});
 
 		await question.save();
@@ -123,10 +132,14 @@ export const createMultipleQuestions = async (req, res) => {
 		}
 
 		const categoryIds = [...new Set(questionsInput.map((q) => q.category))];
-		const validCategories = await Category.find({ _id: { $in: categoryIds } }).select("_id");
+		const validCategories = await Category.find({
+			_id: { $in: categoryIds },
+		}).select("_id");
 		const validCategoryIds = validCategories.map((c) => c._id.toString());
 
-		const invalidCategory = categoryIds.find((id) => !validCategoryIds.includes(id));
+		const invalidCategory = categoryIds.find(
+			(id) => !validCategoryIds.includes(id)
+		);
 		if (invalidCategory) {
 			return res.status(400).json({
 				success: false,
@@ -158,6 +171,11 @@ export const createMultipleQuestions = async (req, res) => {
 			media: q.media || [],
 			richAnswer: q.richAnswer || "",
 			status: q.status || "published",
+			slug: q.title
+				.toLowerCase()
+				.trim()
+				.replace(/[^a-z0-9]+/g, "-")
+				.replace(/(^-|-$)+/g, ""),
 		}));
 
 		const createdQuestions = await Question.insertMany(questionsToInsert);
@@ -181,19 +199,24 @@ export const createMultipleQuestions = async (req, res) => {
 // Get Single Question
 export const getSingleQuestion = async (req, res) => {
 	try {
-		const question = await Question.findById(req.params.id)
+		const question = await Question.findOne({
+			slug: req.params.id,
+			status: "published",
+		})
 			.populate("category", "name slug color")
 			.populate("author", "name username avatar")
 			.populate("relatedQuestions", "title difficulty category")
 			.populate("contributors.user", "name username");
 
 		if (!question || question.status !== "published") {
-			return res.status(404).json({ success: false, message: "Question not found" });
+			return res
+				.status(404)
+				.json({ success: false, message: "Question not found" });
 		}
 
 		await question.incrementViews();
 
-		res.json({ success: true, data: question  });
+		res.json({ success: true, data: question });
 	} catch (err) {
 		console.error("Get question error:", err);
 		res.status(500).json({ success: false, message: "Server error" });
