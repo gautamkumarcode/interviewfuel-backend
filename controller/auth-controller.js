@@ -59,7 +59,7 @@ export const register = async (req, res) => {
 			});
 		}
 
-		const { name, email, username, password } = req.body;
+		const { name, email, username, password, userRole } = req.body;
 
 		const existingUser = await User.findOne({
 			$or: [{ email }, { username }],
@@ -75,7 +75,7 @@ export const register = async (req, res) => {
 			});
 		}
 
-		const user = new User({ name, email, username, password });
+		const user = new User({ name, email, username, password, role: userRole });
 		await user.save();
 
 		sendTokens(res, user, "User registered successfully", 201);

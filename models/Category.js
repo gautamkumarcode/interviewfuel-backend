@@ -32,12 +32,6 @@ const categorySchema = new mongoose.Schema(
 			ref: "Category",
 			default: null,
 		},
-		subcategories: [
-			{
-				type: mongoose.Schema.Types.ObjectId,
-				ref: "Category",
-			},
-		],
 		tags: [String],
 		stats: {
 			questionCount: { type: Number, default: 0 },
@@ -65,7 +59,7 @@ categorySchema.index({ slug: 1 });
 categorySchema.index({ parentCategory: 1 });
 categorySchema.index({ order: 1 });
 
-// Virtual for full category path
+// Virtual for full category path (will only work if populated manually)
 categorySchema.virtual("fullPath").get(function () {
 	return this.parentCategory
 		? `${this.parentCategory.name} > ${this.name}`

@@ -63,7 +63,7 @@ QuestionsRouter.post(
 	[
 		body().isArray({ min: 1 }),
 		body("*.title").trim().isLength({ min: 10, max: 200 }),
-		body("*.content").trim().isLength({ min: 50 }),
+		body("*.content").trim().isLength({ min: 10 }),
 		body("*.category").isMongoId(),
 		body("*.difficulty").isIn(["Easy", "Medium", "Hard"]),
 		body("*.tags").optional().isArray(),

@@ -41,6 +41,10 @@ AuthRouter.post(
 		body("password")
 			.isLength({ min: 6 })
 			.withMessage("Password must be at least 6 characters long"),
+		body("userRole")
+			.optional()
+			.isIn(["user", "admin"])
+			.withMessage('User role must be either "user" or "admin"'),
 	],
 	register
 );

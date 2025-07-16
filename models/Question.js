@@ -16,11 +16,10 @@ const questionSchema = new mongoose.Schema(
 			type: mongoose.Schema.Types.ObjectId,
 			ref: "Category",
 			required: [true, "Category is required"],
+			index: true,
 		},
-		subcategory: {
-			type: String,
-			trim: true,
-		},
+		// 🔥 Removed 'subcategory' — now handled via category tree relationships
+
 		difficulty: {
 			type: String,
 			enum: ["Easy", "Medium", "Hard"],
@@ -40,12 +39,12 @@ const questionSchema = new mongoose.Schema(
 			},
 		],
 		richAnswer: {
-			type: String, // HTML or Markdown
+			type: String, // Markdown or HTML
 			required: [true, "Answer explanation is required"],
 		},
 		media: [
 			{
-				type: String, // image or video URL
+				type: String, // image/video URL
 				trim: true,
 			},
 		],
@@ -108,13 +107,15 @@ const questionSchema = new mongoose.Schema(
 			type: mongoose.Schema.Types.ObjectId,
 			ref: "User",
 		},
+		verifiedAt: Date,
+
 		slug: {
 			type: String,
 			unique: true,
 			required: [true, "Slug is required"],
 			trim: true,
+			lowercase: true,
 		},
-		verifiedAt: Date,
 	},
 	{
 		timestamps: true,
@@ -124,8 +125,10 @@ const questionSchema = new mongoose.Schema(
 );
 
 // Indexes
-questionSchema.index({ category: 1, difficulty: 1 });
+questionSchema.index({ slug: 1 });
 questionSchema.index({ tags: 1 });
+questionSchema.index({ category: 1, status: 1 });
+questionSchema.index({ difficulty: 1 });
 questionSchema.index({ "stats.views": -1 });
 questionSchema.index({ "stats.likes": -1 });
 questionSchema.index({ createdAt: -1 });
@@ -165,7 +168,7 @@ questionSchema.statics.getPopular = function (limit = 10) {
 };
 
 questionSchema.statics.getByDifficulty = function (difficulty, limit = 20) {
-  return this.find({ difficulty, status: "published" })
+	return this.find({ difficulty, status: "published" })
 		.sort({ createdAt: -1 })
 		.limit(limit)
 		.populate("category", "name")

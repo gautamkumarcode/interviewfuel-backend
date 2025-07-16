@@ -1,6 +1,7 @@
 import express from "express";
 import { body } from "express-validator";
 import {
+	bulkUploadCategories,
 	createCategory,
 	getAllCategories,
 	getCategoryBySlug,
@@ -39,6 +40,44 @@ CategoriesRouter.post(
 			.withMessage("Invalid parent category ID"),
 	],
 	createCategory
+);
+
+CategoriesRouter.post(
+	"/bulk",
+	auth,
+	adminAuth,
+	[
+		body("categories")
+			.isArray({ min: 1 })
+			.withMessage("At least one category is required"),
+		body("categories.*.name")
+			.trim()
+			.isLength({ min: 2, max: 50 })
+			.withMessage("Category name must be between 2 and 50 characters"),
+		body("categories.*.slug")
+			.trim()
+			.isLength({ min: 2, max: 50 })
+			.withMessage("Category slug must be between 2 and 50 characters"),
+		body("categories.*.description")
+			.optional()
+			.trim()
+			.isLength({ max: 500 })
+			.withMessage("Description cannot exceed 500 characters"),
+		body("categories.*.color")
+			.optional()
+			.matches(/^#[0-9A-F]{6}$/i)
+			.withMessage("Color must be a valid hex color"),
+		body("categories.*.icon")
+			.optional()
+			.isString()
+			.withMessage("Icon must be a string"),
+		body("categories.*.parentCategory")
+			.optional()
+			.isMongoId()
+			.withMessage("Invalid parent category ID"),
+		body("categories.*.subcategories"),
+	],
+	bulkUploadCategories
 );
 
 export default CategoriesRouter;

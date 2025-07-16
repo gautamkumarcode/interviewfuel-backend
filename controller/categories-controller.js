@@ -1,60 +1,66 @@
 import { validationResult } from "express-validator";
 import Category from "../models/Category.js";
 
+/**
+ * Helper to build nested category tree
+ */
+const buildCategoryTree = (categories, parentId = null) => {
+	const tree = [];
+
+	categories.forEach((category) => {
+		if (
+			(parentId === null && !category.parentCategory) ||
+			(category.parentCategory && category?.parentCategory?.toString() === parentId?.toString())
+		) {
+			const children = buildCategoryTree(categories, category._id);
+			tree.push({ ...category, subcategories: children });
+		}
+	});
+
+	return tree;
+};
+
+
 // GET /api/categories
 export const getAllCategories = async (req, res) => {
 	try {
-		const page = parseInt(req.query.page) || 1;
-		const limit = parseInt(req.query.limit) || 10;
-		const skip = (page - 1) * limit;
+		// Fetch all categories
+		const categories = await Category.find()
+			.sort({ order: 1, name: 1 })
+			.lean();
 
-		// Get total count of categories
-		const totalCountAgg = await Category.aggregate([
-			{
-				$count: "total",
-			},
-		]);
+		// Populate question counts (optional)
+		const withStats = await Promise.all(
+			categories.map(async (cat) => {
+				const count = await Category.aggregate([
+					{ $match: { _id: cat._id } },
+					{
+						$lookup: {
+							from: "questions",
+							localField: "_id",
+							foreignField: "category",
+							as: "questions",
+						},
+					},
+					{
+						$addFields: {
+							"stats.questionCount": { $size: "$questions" },
+						},
+					},
+					{ $project: { questions: 0 } },
+				]);
+				return count[0] || cat;
+			})
+		);
 
-		const total = totalCountAgg[0]?.total || 0;
-		const totalPages = Math.ceil(total / limit);
-
-		// Get paginated categories with counts
-		const categories = await Category.aggregate([
-			{
-				$lookup: {
-					from: "questions",
-					localField: "_id",
-					foreignField: "category",
-					as: "questions",
-				},
-			},
-			{
-				$addFields: {
-					"stats.questionCount": { $size: "$questions" },
-				},
-			},
-			{
-				$project: {
-					questions: 0,
-				},
-			},
-			{
-				$sort: { order: 1, name: 1 },
-			},
-			{ $skip: skip },
-			{ $limit: limit },
-		]);
+		// Build nested structure using parentCategory
+		const tree = buildCategoryTree(withStats);
 
 		res.json({
 			success: true,
 			data: {
-				results: categories,
-				pagination: {
-					current: page,
-					total,
-					totalPages,
-					limit,
-				},
+				results: tree,
+				total: categories.length,
 			},
 		});
 	} catch (error) {
@@ -62,7 +68,6 @@ export const getAllCategories = async (req, res) => {
 		res.status(500).json({ success: false, message: "Server error" });
 	}
 };
-
 
 // GET /api/categories/:slug
 export const getCategoryBySlug = async (req, res) => {
@@ -98,7 +103,15 @@ export const createCategory = async (req, res) => {
 			});
 		}
 
-		const { name, description, color, parentCategory } = req.body;
+		const {
+			name,
+			description,
+			color,
+			icon,
+			parentCategory = null,
+			tags = [],
+			order = 0,
+		} = req.body;
 
 		const slug = name
 			.toLowerCase()
@@ -106,22 +119,82 @@ export const createCategory = async (req, res) => {
 			.replace(/[^a-z0-9]+/g, "-")
 			.replace(/(^-|-$)+/g, "");
 
-		const category = new Category({
+		const category = await Category.create({
 			name,
+			slug,
 			description,
 			color,
+			icon,
 			parentCategory,
-			slug, // include manually generated slug
+			tags,
+			order,
 		});
-		await category.save();
 
-		res.status(201).json({
+		return res.status(201).json({
 			success: true,
 			message: "Category created successfully",
 			data: { category },
 		});
 	} catch (error) {
 		console.error("Create category error:", error);
+		res.status(500).json({ success: false, message: "Server error" });
+	}
+};
+
+// POST /api/categories/bulk
+export const bulkUploadCategories = async (req, res) => {
+	try {
+		const { categories } = req.body;
+
+		if (!Array.isArray(categories) || categories.length === 0) {
+			return res.status(400).json({
+				success: false,
+				message: "Categories array is required and cannot be empty",
+			});
+		}
+
+		const createdCategories = [];
+
+		for (const cat of categories) {
+			const {
+				name,
+				description,
+				color,
+				icon,
+				parentCategory = null,
+				tags = [],
+				order = 0,
+			} = cat;
+
+			if (!name) continue;
+
+			const slug = name
+				.toLowerCase()
+				.trim()
+				.replace(/[^a-z0-9]+/g, "-")
+				.replace(/(^-|-$)+/g, "");
+
+			const newCategory = await Category.create({
+				name,
+				slug,
+				description,
+				color,
+				icon,
+				parentCategory,
+				tags,
+				order,
+			});
+
+			createdCategories.push(newCategory);
+		}
+
+		res.status(201).json({
+			success: true,
+			message: `${createdCategories.length} categories created successfully`,
+			data: { categories: createdCategories },
+		});
+	} catch (error) {
+		console.error("Bulk upload error:", error);
 		res.status(500).json({ success: false, message: "Server error" });
 	}
 };
