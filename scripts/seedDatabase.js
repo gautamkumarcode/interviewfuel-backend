@@ -1,185 +1,270 @@
+import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
-import "express-async-errors";
-import "module-alias/register";
 import mongoose from "mongoose";
+import Category from "../models/Category.js";
+import Question from "../models/Question.js";
+import User from "../models/User.js";
 
-// Load env
 dotenv.config();
-
-// Import models
-import Achievement from "@/models/Achievement.js";
-import Category from "@/models/Category.js";
-import Question from "@/models/Question.js";
-import User from "@/models/User.js";
-
-const seedData = async () => {
+// Database connection
+const connectDB = async () => {
 	try {
-		await mongoose.connect(process.env.MONGODB_URI);
-		console.log("✅ MongoDB connected");
-
-		// Clear all collections
-		await Promise.all([
-			User.deleteMany(),
-			Category.deleteMany(),
-			Question.deleteMany(),
-			Achievement.deleteMany(),
-		]);
-		console.log("🧹 Cleared existing collections");
-
-		// Create admin user
-		const adminUser = await User.create({
-			name: "Admin User",
-			email: "admin@interviewprep.com",
-			username: "admin",
-			password: "admin123",
-			role: "admin",
-			bio: "System administrator and content curator",
-			isActive: true,
+		await mongoose.connect(process.env.MONGODB_URI, {
+			useNewUrlParser: true,
+			useUnifiedTopology: true,
 		});
-
-		// Create sample user
-		const sampleUser = await User.create({
-			name: "John Doe",
-			email: "john@example.com",
-			username: "johndoe",
-			password: "password123",
-			bio: "Full-stack developer preparing for senior engineer interviews",
-			location: "San Francisco, CA",
-			website: "https://johndoe.dev",
-			social: {
-				github: "johndoe",
-				linkedin: "john-doe-dev",
-				twitter: "johndoe_dev",
-			},
-			stats: {
-				questionsAnswered: 342,
-				practiceHours: 127,
-				currentStreak: 12,
-				longestStreak: 28,
-				completionRate: 89,
-				averageTime: 4.4,
-				totalSessions: 156,
-				favoriteCategory: "JavaScript",
-			},
-		});
-		console.log("👤 Users created");
-
-		// Create categories
-		const categories = await Category.insertMany([
-			{ name: "JavaScript", slug: "javascript", description: "JavaScript fundamentals, ES6+, and advanced concepts", icon: "code", color: "#F7DF1E", order: 1 },
-			{ name: "React", slug: "react", description: "React components, hooks, state management, and ecosystem", icon: "react", color: "#61DAFB", order: 2 },
-			{ name: "Node.js", slug: "nodejs", description: "Server-side JavaScript, APIs, and backend development", icon: "server", color: "#339933", order: 3 },
-			{ name: "Algorithms", slug: "algorithms", description: "Data structures, algorithms, and problem-solving", icon: "cpu", color: "#FF6B6B", order: 4 },
-			{ name: "System Design", slug: "system-design", description: "Scalability, architecture, and distributed systems", icon: "network", color: "#4ECDC4", order: 5 },
-			{ name: "Database", slug: "database", description: "SQL, NoSQL, database design, and optimization", icon: "database", color: "#45B7D1", order: 6 },
-		]);
-		console.log("📁 Categories created");
-
-		// Get category ids
-		const cat = Object.fromEntries(categories.map((c) => [c.slug, c._id]));
-
-		// Create sample questions
-		const questions = await Question.insertMany([
-			{
-				title: "What is the difference between let, const, and var in JavaScript?",
-				content: "Explain scope, hoisting, re-declaration, and best practices for let/const/var.",
-				category: cat["javascript"],
-				difficulty: "Easy",
-				tags: ["variables", "es6", "scope"],
-				companies: [
-					{ name: "Google", frequency: 5 },
-					{ name: "Microsoft", frequency: 4 },
-				],
-				solutions: [{
-					title: "Scope Differences Example",
-					language: "javascript",
-					code: `function letExample() { let x = 1; }`,
-					explanation: "let is block scoped.",
-				}],
-				hints: [{ order: 1, content: "Think about scope types" }],
-				bestPractices: ["Use const by default"],
-				timeLimit: 15,
-				author: adminUser._id,
-				status: "published",
-			},
-			{
-				title: "Explain React Hooks and their use cases",
-				content: "Explain useState, useEffect and why hooks were introduced.",
-				category: cat["react"],
-				difficulty: "Medium",
-				tags: ["hooks", "react"],
-				companies: [
-					{ name: "Facebook", frequency: 5 },
-					{ name: "Netflix", frequency: 3 },
-				],
-				solutions: [{
-					title: "useState Hook",
-					language: "javascript",
-					code: `const [count, setCount] = useState(0);`,
-					explanation: "Tracks state in function components.",
-				}],
-				hints: [{ order: 1, content: "Why did class components struggle?" }],
-				bestPractices: ["Use custom hooks for reusable logic"],
-				timeLimit: 20,
-				author: adminUser._id,
-				status: "published",
-			},
-		]);
-		console.log("❓ Questions created");
-
-		// Update question counts for categories
-		for (const category of categories) {
-			await category.updateQuestionCount();
-		}
-
-		// Create achievements
-		const achievements = await Achievement.insertMany([
-			{
-				title: "First Steps",
-				description: "Complete your first practice session",
-				icon: "target",
-				rarity: "common",
-				category: "practice",
-				criteria: { type: "count", target: 1, metric: "totalSessions", condition: "gte" },
-				rewards: { points: 10, badge: "first-steps" },
-				order: 1,
-			},
-			{
-				title: "Consistency Champion",
-				description: "Practice for 7 consecutive days",
-				icon: "calendar",
-				rarity: "uncommon",
-				category: "streak",
-				criteria: { type: "streak", target: 7, metric: "currentStreak", condition: "gte" },
-				rewards: { points: 50, badge: "consistency-champion" },
-				order: 2,
-			},
-		]);
-		console.log("🏆 Achievements created");
-
-		// Assign sample achievement to sample user
-		sampleUser.achievements.push({
-			achievementId: achievements[0]._id,
-			earnedAt: new Date(),
-			progress: 100,
-		});
-		await sampleUser.save();
-
-		// Summary
-		console.log("\n📊 Seed Summary:");
-		console.table({
-			Users: await User.countDocuments(),
-			Categories: await Category.countDocuments(),
-			Questions: await Question.countDocuments(),
-			Achievements: await Achievement.countDocuments(),
-		});
-
-		await mongoose.disconnect();
-		console.log("✅ Seeding completed and MongoDB disconnected");
+		console.log("MongoDB Connected...");
 	} catch (err) {
-		console.error("❌ Seeding failed:", err);
+		console.error("Database connection error:", err.message);
 		process.exit(1);
 	}
 };
 
-seedData();
+// Clear existing data
+const clearDatabase = async () => {
+	try {
+		await Category.deleteMany({});
+		await User.deleteMany({});
+		await Question.deleteMany({});
+		console.log("Database cleared");
+	} catch (err) {
+		console.error("Error clearing database:", err.message);
+	}
+};
+
+// Seed categories and subcategories
+const seedCategories = async () => {
+	try {
+		// Main categories
+		const frontend = await Category.create({
+			name: "Frontend",
+			slug: "frontend",
+			description: "Frontend development technologies",
+			icon: "monitor",
+			color: "#3B82F6",
+		});
+
+		const backend = await Category.create({
+			name: "Backend",
+			slug: "backend",
+			description: "Backend development technologies",
+			icon: "server",
+			color: "#10B981",
+		});
+
+		// Frontend subcategories
+		const react = await Category.create({
+			name: "React",
+			slug: "react",
+			description: "React.js library",
+			icon: "react",
+			color: "#61DAFB",
+			parentCategory: frontend._id,
+		});
+
+		const angular = await Category.create({
+			name: "Angular",
+			slug: "angular",
+			description: "Angular framework",
+			icon: "angular",
+			color: "#DD0031",
+			parentCategory: frontend._id,
+		});
+
+		// React subcategories
+		const reactHooks = await Category.create({
+			name: "React Hooks",
+			slug: "react-hooks",
+			description: "React Hooks concepts",
+			icon: "anchor",
+			color: "#61DAFB",
+			parentCategory: react._id,
+		});
+
+		const reactRouter = await Category.create({
+			name: "React Router",
+			slug: "react-router",
+			description: "React Router for navigation",
+			icon: "navigation",
+			color: "#61DAFB",
+			parentCategory: react._id,
+		});
+
+		// Backend subcategories
+		const nodejs = await Category.create({
+			name: "Node.js",
+			slug: "nodejs",
+			description: "Node.js runtime",
+			icon: "nodejs",
+			color: "#68A063",
+			parentCategory: backend._id,
+		});
+
+		const express = await Category.create({
+			name: "Express",
+			slug: "express",
+			description: "Express.js framework",
+			icon: "express",
+			color: "#000000",
+			parentCategory: backend._id,
+		});
+
+		console.log("Categories seeded successfully");
+
+		return {
+			frontend,
+			backend,
+			react,
+			angular,
+			reactHooks,
+			reactRouter,
+			nodejs,
+			express,
+		};
+	} catch (err) {
+		console.error("Error seeding categories:", err.message);
+	}
+};
+
+// Seed users
+const seedUsers = async () => {
+	try {
+		const hashedPassword = await bcrypt.hash("password123", 12);
+
+		// Generate unique usernames that meet validation requirements
+		const timestamp = Date.now();
+		const adminUsername = `admin_${timestamp}`.slice(0, 20); // Ensure maxlength
+		const regularUsername = `user_${timestamp}`.slice(0, 20); // Ensure maxlength
+
+		const adminUser = await User.create({
+			name: "Admin User",
+			email: `admin_${timestamp}@example.com`, // Also ensure unique email
+			userName: adminUsername,
+			password: hashedPassword,
+			role: "admin",
+			bio: "I'm the administrator of this platform",
+		});
+
+		const regularUser = await User.create({
+			name: "Regular User",
+			email: `user_${timestamp}@example.com`, // Unique email
+			userName: regularUsername,
+			password: hashedPassword,
+			bio: "I'm a regular user learning web development",
+		});
+
+		console.log("Users seeded successfully");
+		return { adminUser, regularUser };
+	} catch (err) {
+		console.error("Error seeding users:", err.message);
+		throw err;
+	}
+};
+
+// Seed questions
+const seedQuestions = async (categories, users) => {
+	try {
+		// React Hooks questions
+		const reactHooksQuestion1 = await Question.create({
+			title: "What is useState hook in React?",
+			content: "Explain the useState hook and how to use it",
+			category: categories.reactHooks._id,
+			difficulty: "Easy",
+			tags: ["react", "hooks", "usestate"],
+			richAnswer:
+				"The `useState` hook is a built-in React hook that allows you to add state to functional components...",
+			solutions: [
+				{
+					title: "Basic useState example",
+					language: "javascript",
+					code: "const [count, setCount] = useState(0);",
+					explanation:
+						"This initializes a state variable 'count' with initial value 0",
+					timeComplexity: "O(1)",
+					spaceComplexity: "O(1)",
+				},
+			],
+			hints: [
+				{
+					order: 1,
+					content:
+						"useState returns an array with two values: the current state and a function to update it",
+				},
+			],
+			author: users.adminUser._id,
+			slug: "what-is-usestate-hook-in-react",
+		});
+
+		const reactHooksQuestion2 = await Question.create({
+			title: "How does useEffect differ from componentDidMount?",
+			content:
+				"Compare useEffect hook with class component's componentDidMount",
+			category: categories.reactHooks._id,
+			difficulty: "Medium",
+			tags: ["react", "hooks", "useeffect"],
+			richAnswer:
+				"The `useEffect` hook serves a similar purpose to `componentDidMount`, `componentDidUpdate`, and `componentWillUnmount` combined...",
+			solutions: [
+				{
+					title: "useEffect vs lifecycle methods",
+					language: "javascript",
+					code: "useEffect(() => {\n  // Your effect here\n  return () => {\n    // Cleanup\n  };\n}, [dependencies]);",
+					explanation:
+						"The empty dependency array makes it similar to componentDidMount",
+					timeComplexity: "O(1)",
+					spaceComplexity: "O(1)",
+				},
+			],
+			author: users.regularUser._id,
+			slug: "how-does-useeffect-differ-from-componentdidmount",
+		});
+
+		// React Router questions
+		const reactRouterQuestion = await Question.create({
+			title: "How to implement protected routes in React Router?",
+			content: "Explain how to create routes that require authentication",
+			category: categories.reactRouter._id,
+			difficulty: "Medium",
+			tags: ["react", "router", "authentication"],
+			richAnswer:
+				"To implement protected routes in React Router, you can create a wrapper component that checks for authentication...",
+			solutions: [
+				{
+					title: "ProtectedRoute component",
+					language: "javascript",
+					code: "const ProtectedRoute = ({ children }) => {\n  const { user } = useAuth();\n  \n  if (!user) {\n    return <Navigate to='/login' />;\n  }\n  \n  return children;\n};",
+					explanation:
+						"This component checks for a user and redirects to login if not authenticated",
+					timeComplexity: "O(1)",
+					spaceComplexity: "O(1)",
+				},
+			],
+			author: users.adminUser._id,
+			slug: "how-to-implement-protected-routes-in-react-router",
+		});
+
+		console.log("Questions seeded successfully");
+	} catch (err) {
+		console.error("Error seeding questions:", err.message);
+	}
+};
+
+// Main seeding function
+const seedDatabase = async () => {
+	try {
+		await connectDB();
+		await clearDatabase();
+
+		const categories = await seedCategories();
+		const users = await seedUsers();
+		await seedQuestions(categories, users);
+
+		console.log("Database seeding completed successfully");
+		process.exit(0);
+	} catch (err) {
+		console.error("Database seeding failed:", err.message);
+		process.exit(1);
+	}
+};
+
+seedDatabase();

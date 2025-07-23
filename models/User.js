@@ -19,9 +19,8 @@ const userSchema = new mongoose.Schema(
 				"Please enter a valid email",
 			],
 		},
-		username: {
+		userName: {
 			type: String,
-			required: [true, "Username is required"],
 			unique: true,
 			trim: true,
 			minlength: [3, "Username must be at least 3 characters"],
@@ -30,6 +29,7 @@ const userSchema = new mongoose.Schema(
 				/^[a-zA-Z0-9_]+$/,
 				"Username can only contain letters, numbers, and underscores",
 			],
+			default: `user${Date.now()}`, // Default username if not provided
 		},
 		password: {
 			type: String,
