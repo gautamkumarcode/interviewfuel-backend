@@ -16,21 +16,21 @@ const practiceSessionSchema = new mongoose.Schema(
 				question: {
 					type: mongoose.Schema.Types.ObjectId,
 					ref: "Question",
-					required: true,
-				},
-				answer: String,
-				isCorrect: Boolean,
-				timeSpent: Number, // in seconds
-				hints: [
-					{
-						hintIndex: Number,
-						viewedAt: { type: Date, default: Date.now },
+					required: function () {
+						return !this.aiGenerated;
 					},
-				],
+				},
+				aiGenerated: { type: Boolean, default: false },
+				title: String,
+				content: String,
+				difficulty: String,
+				timeLimit: Number,
+				source: { type: String, enum: ["ai", "db"] },
 				startedAt: Date,
-				completedAt: Date,
+				// add other fields as needed
 			},
 		],
+
 		settings: {
 			duration: { type: Number, default: 60 }, // in minutes
 			questionCount: { type: Number, default: 5 },

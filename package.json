@@ -21,6 +21,7 @@
 	"author": "Your Name",
 	"license": "MIT",
 	"dependencies": {
+		"@google/generative-ai": "^0.24.1",
 		"bcryptjs": "^2.4.3",
 		"cloudinary": "^1.41.0",
 		"compression": "^1.7.4",
@@ -37,6 +38,7 @@
 		"morgan": "^1.10.0",
 		"multer": "^1.4.5-lts.1",
 		"nodemailer": "^6.9.7",
+		"openai": "^5.10.1",
 		"xss-clean": "^0.1.4"
 	},
 	"devDependencies": {

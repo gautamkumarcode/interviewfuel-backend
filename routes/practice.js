@@ -1,5 +1,5 @@
 import express from "express";
-import { body } from "express-validator";
+import { body, param } from "express-validator";
 import {
 	completeSession,
 	createPracticeSession,
@@ -11,35 +11,66 @@ import { auth } from "../middleware/auth.js";
 
 const PracticeRouter = express.Router();
 
+// Create new practice session
 PracticeRouter.post(
-	"/sessions",
+	"/sessions/create",
 	auth,
 	[
-		body("settings.duration").optional().isInt({ min: 5, max: 180 }),
-		body("settings.questionCount").optional().isInt({ min: 1, max: 50 }),
+		body("settings.duration")
+			.optional()
+			.isInt({ min: 5, max: 180 })
+			.withMessage("Duration must be between 5 and 180 minutes"),
+		body("settings.questionCount")
+			.optional()
+			.isInt({ min: 1, max: 50 })
+			.withMessage("Question count must be between 1 and 50"),
 		body("settings.difficulty")
 			.optional()
-			.isIn(["Easy", "Medium", "Hard", "Mixed"]),
-		body("settings.categories").optional().isArray(),
+			.isIn(["Easy", "Medium", "Hard", "Mixed"])
+			.withMessage("Invalid difficulty level"),
+		body("settings.categories")
+			.optional()
+			.isArray({ min: 1 })
+			.withMessage("Categories should be an array of category IDs"),
 	],
 	createPracticeSession
 );
 
-PracticeRouter.get("/sessions/:id", auth, getPracticeSessionById);
+// Get session by ID
+PracticeRouter.get(
+	"/sessions/:id",
+	auth,
+	[param("id").isMongoId().withMessage("Invalid session ID")],
+	getPracticeSessionById
+);
 
+// Submit answer to a question
 PracticeRouter.put(
 	"/sessions/:id/answer",
 	auth,
 	[
-		body("questionIndex").isInt({ min: 0 }),
-		body("answer").trim().notEmpty(),
-		body("timeSpent").optional().isInt({ min: 0 }),
+		param("id").isMongoId().withMessage("Invalid session ID"),
+		body("questionIndex")
+			.isInt({ min: 0 })
+			.withMessage("Invalid question index"),
+		body("answer").trim().notEmpty().withMessage("Answer cannot be empty"),
+		body("timeSpent")
+			.optional()
+			.isInt({ min: 0 })
+			.withMessage("Invalid time spent"),
 	],
 	submitAnswer
 );
 
-PracticeRouter.put("/sessions/:id/complete", auth, completeSession);
+// Mark session as complete
+PracticeRouter.put(
+	"/sessions/:id/complete",
+	auth,
+	[param("id").isMongoId().withMessage("Invalid session ID")],
+	completeSession
+);
 
+// Get all sessions of logged-in user
 PracticeRouter.get("/sessions", auth, getUserSessions);
 
 export default PracticeRouter;
