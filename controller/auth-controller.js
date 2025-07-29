@@ -19,7 +19,7 @@ const sendTokens = (res, user, message, statusCode = 200, minimal = false) => {
 			secure: process.env.NODE_ENV === "production",
 			sameSite: "Lax",
 			path: "/",
-			maxAge: 15 * 60 * 1000, // 15 mins
+			maxAge: 1 * 60 * 1000, // 15 mins
 		})
 		.cookie("refreshToken", refreshToken, {
 			httpOnly: true,

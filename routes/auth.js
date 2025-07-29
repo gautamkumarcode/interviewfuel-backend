@@ -63,8 +63,7 @@ AuthRouter.post(
 );
 
 // Get current user
-AuthRouter.get("/profile", auth, getMe);
-
+AuthRouter.get("/me", auth, getMe);
 // Logout
 AuthRouter.post("/logout", auth, logout);
 
