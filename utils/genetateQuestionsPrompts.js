@@ -39,5 +39,10 @@ For each item, respond in this JSON format:
   }
 ]
 
-Be objective, technically accurate, and constructive in your feedback.
+Instructions:
+- If a modelAnswer is provided, compare the user's answer against it
+- If no modelAnswer is provided, evaluate based on technical accuracy and completeness for the given question
+- Be objective, technically accurate, and constructive in your feedback
+- Focus on the quality, completeness, and technical correctness of the answer
+- Provide specific suggestions for improvement when possible
 `;

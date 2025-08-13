@@ -131,7 +131,6 @@ export const getPracticeSessionById = async (req, res) => {
 		res.status(500).json({ success: false, message: "Server error" });
 	}
 };
-
 export const submitAnswer = async (req, res) => {
 	try {
 		const errors = validationResult(req);
@@ -139,9 +138,10 @@ export const submitAnswer = async (req, res) => {
 			return res.status(400).json({ success: false, errors: errors.array() });
 		}
 
-		const { answers } = req.body; // [{ questionIndex: 0, answer: '...', timeSpent: 10 }, ...]
+		const { answers } = req.body;
 		const session = await PracticeSession.findById(req.params.id).populate(
-			"questions.question"
+			"questions.question",
+			"title richAnswer content difficulty timeLimit"
 		);
 
 		if (!session)
@@ -156,28 +156,96 @@ export const submitAnswer = async (req, res) => {
 
 		// 1. Build QA list for Gemini AI
 		const qaList = answers.map(({ questionIndex, answer }) => {
-			const questionObj = session.questions[questionIndex]?.question;
-			if (!questionObj) {
+			const sessionQuestion = session.questions[questionIndex];
+			if (!sessionQuestion) {
 				throw new Error(`Invalid question index: ${questionIndex}`);
 			}
+
+			// Handle AI-generated questions vs DB questions differently
+			let questionObj;
+			if (sessionQuestion.aiGenerated) {
+				// For AI-generated questions, the question data is directly in the session
+				questionObj = sessionQuestion;
+			} else {
+				// For DB questions, we need the populated question object
+				questionObj = sessionQuestion.question;
+				if (!questionObj) {
+					throw new Error(`Question not found for index: ${questionIndex}`);
+				}
+			}
+
 			return {
 				question: questionObj.title,
-				modelAnswer: questionObj.answerExplanation,
+				// For DB questions use richAnswer, for AI questions don't provide model answer
+				modelAnswer: sessionQuestion.aiGenerated
+					? undefined
+					: questionObj.richAnswer || "No model answer provided",
 				userAnswer: answer,
 			};
 		});
 
+		console.log("QA List for evaluation:", JSON.stringify(qaList, null, 2));
+
 		// 2. Get AI evaluation
-		const aiResults = await evaluateAnswer(qaList); // returns [{ score, feedback, notes }, ...]
+		const aiResults = await evaluateAnswer(qaList);
 
 		if (
 			!aiResults ||
 			!Array.isArray(aiResults) ||
 			aiResults.length !== answers.length
 		) {
-			return res.status(500).json({
-				success: false,
-				message: "AI evaluation failed or malformed.",
+			console.error("AI evaluation failed, providing fallback results");
+			// Provide fallback results when AI evaluation fails
+			const fallbackResults = answers.map(
+				({ questionIndex, answer }, index) => ({
+					question: qaList[index]?.question || "Unknown question",
+					userAnswer: answer,
+					isCorrect: false,
+					feedback:
+						"AI evaluation temporarily unavailable. Your answer has been recorded.",
+					score: 5, // Neutral score when evaluation fails
+				})
+			);
+
+			// Continue with saving the answers even if evaluation fails
+			for (let i = 0; i < answers.length; i++) {
+				const { questionIndex, answer, timeSpent } = answers[i];
+				const sessionQuestion = session.questions[questionIndex];
+
+				if (!sessionQuestion) continue;
+
+				// Update session question
+				session.questions[questionIndex] = {
+					...(sessionQuestion._doc || sessionQuestion),
+					answer,
+					timeSpent: timeSpent || 0,
+					completedAt: new Date(),
+				};
+
+				// For AI-generated questions, create a temporary question ID or handle differently
+				const questionId = sessionQuestion.aiGenerated
+					? sessionQuestion._id || `ai_${questionIndex}`
+					: sessionQuestion.question._id;
+
+				// Save to attempts with fallback data
+				await Attempt.create({
+					user: req.user.id,
+					practiceSession: session._id,
+					question: questionId,
+					answer,
+					score: fallbackResults[i].score,
+					feedback: fallbackResults[i].feedback,
+					notes: "AI evaluation failed",
+					timeSpent,
+				});
+			}
+
+			await session.save();
+
+			return res.json({
+				success: true,
+				message: "Answers submitted (evaluation fallback applied)",
+				data: fallbackResults,
 			});
 		}
 
@@ -185,23 +253,28 @@ export const submitAnswer = async (req, res) => {
 		for (let i = 0; i < answers.length; i++) {
 			const { questionIndex, answer, timeSpent } = answers[i];
 			const result = aiResults[i];
-			const questionItem = session.questions[questionIndex]?.question;
+			const sessionQuestion = session.questions[questionIndex];
 
-			if (!questionItem) continue;
+			if (!sessionQuestion) continue;
 
-			// Save inside session
+			// Update session question
 			session.questions[questionIndex] = {
-				...session.questions[questionIndex]._doc,
+				...(sessionQuestion._doc || sessionQuestion),
 				answer,
 				timeSpent: timeSpent || 0,
 				completedAt: new Date(),
 			};
 
+			// For AI-generated questions, create a temporary question ID or handle differently
+			const questionId = sessionQuestion.aiGenerated
+				? sessionQuestion._id || `ai_${questionIndex}`
+				: sessionQuestion.question._id;
+
 			// Save to attempts
 			await Attempt.create({
 				user: req.user.id,
 				practiceSession: session._id,
-				question: questionItem._id,
+				question: questionId,
 				answer,
 				score: result.score,
 				feedback: result.feedback,
@@ -223,6 +296,96 @@ export const submitAnswer = async (req, res) => {
 	}
 };
 
+// export const submitAnswer = async (req, res) => {
+// 	try {
+// 		const errors = validationResult(req);
+// 		if (!errors.isEmpty()) {
+// 			return res.status(400).json({ success: false, errors: errors.array() });
+// 		}
+
+// 		const { answers } = req.body; // [{ questionIndex: 0, answer: '...', timeSpent: 10 }, ...]
+// 		const session = await PracticeSession.findById(req.params.id).populate(
+// 			"questions.question"
+// 		);
+
+// 		if (!session)
+// 			return res
+// 				.status(404)
+// 				.json({ success: false, message: "Session not found" });
+
+// 		if (session.user.toString() !== req.user.id)
+// 			return res
+// 				.status(403)
+// 				.json({ success: false, message: "Not authorized" });
+
+// 		// 1. Build QA list for Gemini AI
+// 		const qaList = answers.map(({ questionIndex, answer }) => {
+// 			const questionObj = session.questions[questionIndex]?.question;
+// 			if (!questionObj) {
+// 				throw new Error(`Invalid question index: ${questionIndex}`);
+// 			}
+// 			return {
+// 				question: questionObj.title,
+// 				modelAnswer: questionObj.answerExplanation,
+// 				userAnswer: answer,
+// 			};
+// 		});
+
+// 		// 2. Get AI evaluation
+// 		const aiResults = await evaluateAnswer(qaList); // returns [{ score, feedback, notes }, ...]
+
+// 		if (
+// 			!aiResults ||
+// 			!Array.isArray(aiResults) ||
+// 			aiResults.length !== answers.length
+// 		) {
+// 			return res.status(500).json({
+// 				success: false,
+// 				message: "AI evaluation failed or malformed.",
+// 			});
+// 		}
+
+// 		// 3. Save results to PracticeSession + Attempt
+// 		for (let i = 0; i < answers.length; i++) {
+// 			const { questionIndex, answer, timeSpent } = answers[i];
+// 			const result = aiResults[i];
+// 			const questionItem = session.questions[questionIndex]?.question;
+
+// 			if (!questionItem) continue;
+
+// 			// Save inside session
+// 			session.questions[questionIndex] = {
+// 				...session.questions[questionIndex]._doc,
+// 				answer,
+// 				timeSpent: timeSpent || 0,
+// 				completedAt: new Date(),
+// 			};
+
+// 			// Save to attempts
+// 			await Attempt.create({
+// 				user: req.user.id,
+// 				practiceSession: session._id,
+// 				question: questionItem._id,
+// 				answer,
+// 				score: result.score,
+// 				feedback: result.feedback,
+// 				notes: result.notes,
+// 				timeSpent,
+// 			});
+// 		}
+
+// 		await session.save();
+
+// 		res.json({
+// 			success: true,
+// 			message: "Answers submitted and evaluated",
+// 			data: aiResults,
+// 		});
+// 	} catch (error) {
+// 		console.error("Submit answer error:", error);
+// 		res.status(500).json({ success: false, message: "Server error" });
+// 	}
+// };
 
 export const completeSession = async (req, res) => {
 	try {
@@ -288,7 +451,7 @@ export const getUserSessions = async (req, res) => {
 		res.json({
 			success: true,
 			data: {
-				sessions,
+				results: sessions,
 				pagination: {
 					current: Number(page),
 					pages: Math.ceil(total / limit),

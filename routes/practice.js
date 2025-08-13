@@ -50,11 +50,17 @@ PracticeRouter.put(
 	auth,
 	[
 		param("id").isMongoId().withMessage("Invalid session ID"),
-		body("questionIndex")
+		body("answers")
+			.isArray({ min: 1 })
+			.withMessage("Answers array is required with at least one answer"),
+		body("answers.*.questionIndex")
 			.isInt({ min: 0 })
 			.withMessage("Invalid question index"),
-		body("answer").trim().notEmpty().withMessage("Answer cannot be empty"),
-		body("timeSpent")
+		body("answers.*.answer")
+			.trim()
+			.notEmpty()
+			.withMessage("Answer cannot be empty"),
+		body("answers.*.timeSpent")
 			.optional()
 			.isInt({ min: 0 })
 			.withMessage("Invalid time spent"),

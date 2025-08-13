@@ -47,11 +47,37 @@ export const evaluateAnswer = async (qaList) => {
 	const result = await model.generateContent(prompt);
 	const text = result.response.text();
 
+	// Clean possible markdown code block formatting (e.g., ```json ... ```)
+	const cleanText = text.replace(/```json|```/g, "").trim();
+
 	// Try to parse the JSON returned from Gemini
 	try {
-		return JSON.parse(text);
+		const parsed = JSON.parse(cleanText);
+
+		// Validate the response structure
+		if (!Array.isArray(parsed)) {
+			console.error("Gemini response is not an array:", cleanText);
+			return null;
+		}
+
+		// Validate each item has required properties
+		const isValidResponse = parsed.every(
+			(item) =>
+				item.hasOwnProperty("question") &&
+				item.hasOwnProperty("userAnswer") &&
+				item.hasOwnProperty("feedback") &&
+				item.hasOwnProperty("score") &&
+				typeof item.score === "number"
+		);
+
+		if (!isValidResponse) {
+			console.error("Gemini response has invalid structure:", cleanText);
+			return null;
+		}
+
+		return parsed;
 	} catch (err) {
-		console.error("Failed to parse Gemini response:", text);
+		console.error("Failed to parse Gemini response:", cleanText);
 		return null;
 	}
 };
