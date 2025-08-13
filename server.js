@@ -40,7 +40,7 @@ app.use(
 	cors({
 		origin: [
 			process.env.FRONTEND_URL,
-			"https://interview-fuel.netlify.app/",
+			"https://interview-fuel.netlify.app",
 			"http://localhost:3000",
 		], // your frontend origin
 		credentials: true,
