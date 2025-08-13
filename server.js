@@ -38,7 +38,11 @@ app.set("trust proxy", 1); // Trust first proxy for rate limiting
 app.use(helmet());
 app.use(
 	cors({
-		origin: "http://localhost:3000", // your frontend origin
+		origin: [
+			process.env.FRONTEND_URL,
+			"https://interview-fuel.netlify.app/",
+			"http://localhost:3000",
+		], // your frontend origin
 		credentials: true,
 	})
 );
