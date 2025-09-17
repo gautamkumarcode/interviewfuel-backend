@@ -25,9 +25,16 @@ const practiceSessionSchema = new mongoose.Schema(
 				content: String,
 				difficulty: String,
 				timeLimit: Number,
-				source: { type: String, enum: ["ai", "db"] },
-				startedAt: Date,
-				// add other fields as needed
+				source: { type: String, enum: ["ai", "db"], default: "db" },
+				startedAt: { type: Date, default: Date.now },
+				// Fields to store user's response and results
+				answer: { type: String, default: "" },
+				timeSpent: { type: Number, default: 0 },
+				completedAt: Date,
+				score: { type: Number, min: 0, max: 10, default: 0 },
+				isCorrect: { type: Boolean, default: false },
+				feedback: { type: String, default: "" },
+				notes: { type: String, default: "" },
 			},
 		],
 
@@ -90,9 +97,13 @@ practiceSessionSchema.methods.calculateResults = function () {
 	this.results.answeredQuestions = answeredQuestions;
 	this.results.correctAnswers = correctAnswers;
 	this.results.completionRate =
-		totalQuestions > 0 ? (answeredQuestions / totalQuestions) * 100 : 0;
+		totalQuestions > 0
+			? Math.round((answeredQuestions / totalQuestions) * 100)
+			: 0;
 	this.results.accuracy =
-		answeredQuestions > 0 ? (correctAnswers / answeredQuestions) * 100 : 0;
+		answeredQuestions > 0
+			? Math.round((correctAnswers / answeredQuestions) * 100)
+			: 0;
 
 	const totalTime = this.questions.reduce(
 		(sum, q) => sum + (q.timeSpent || 0),
@@ -100,7 +111,9 @@ practiceSessionSchema.methods.calculateResults = function () {
 	);
 	this.results.totalTimeSpent = totalTime;
 	this.results.averageTimePerQuestion =
-		answeredQuestions > 0 ? totalTime / answeredQuestions : 0;
+		answeredQuestions > 0
+			? Math.round((totalTime / answeredQuestions) * 10) / 10
+			: 0;
 
 	return this.save();
 };
@@ -123,7 +136,7 @@ practiceSessionSchema.statics.getUserStats = async function (
 	return this.aggregate([
 		{
 			$match: {
-				user: mongoose.Types.ObjectId(userId),
+				user: new mongoose.Types.ObjectId(userId),
 				status: "completed",
 				completedAt: { $gte: startDate },
 			},

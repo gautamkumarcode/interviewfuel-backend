@@ -22,12 +22,10 @@ const buildCategoryTree = (categories, parentId = null) => {
 
 
 // GET /api/categories
-export const getAllCategories = async (req, res) => {
+export const getAllCategoriesInTree = async (req, res) => {
 	try {
 		// Fetch all categories
-		const categories = await Category.find()
-			.sort({ order: 1, name: 1 })
-			.lean();
+		const categories = await Category.find().sort({ order: 1, name: 1 }).lean();
 
 		// Populate question counts (optional)
 		const withStats = await Promise.all(
@@ -60,6 +58,24 @@ export const getAllCategories = async (req, res) => {
 			success: true,
 			data: {
 				results: tree,
+				total: categories.length,
+			},
+		});
+	} catch (error) {
+		console.error("Get categories error:", error);
+		res.status(500).json({ success: false, message: "Server error" });
+	}
+};
+
+export const getAllCategories = async (req, res) => {
+	try {
+		// Fetch all categories
+		const categories = await Category.find().sort({ order: 1, name: 1 }).lean();
+
+		res.json({
+			success: true,
+			data: {
+				results: categories,
 				total: categories.length,
 			},
 		});

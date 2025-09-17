@@ -8,6 +8,7 @@ import {
 	submitAnswer,
 } from "../controller/practice-controller.js";
 import { auth } from "../middleware/auth.js";
+import PracticeSession from "../models/PracticeSession.js";
 
 const PracticeRouter = express.Router();
 
@@ -78,5 +79,49 @@ PracticeRouter.put(
 
 // Get all sessions of logged-in user
 PracticeRouter.get("/sessions", auth, getUserSessions);
+
+// Share session (make it publicly accessible)
+PracticeRouter.post(
+	"/sessions/:id/share",
+	auth,
+	[param("id").isMongoId().withMessage("Invalid session ID")],
+	async (req, res) => {
+		try {
+			const session = await PracticeSession.findById(req.params.id);
+
+			if (!session) {
+				return res.status(404).json({
+					success: false,
+					message: "Session not found",
+				});
+			}
+
+			if (session.user.toString() !== req.user.id) {
+				return res.status(403).json({
+					success: false,
+					message: "Not authorized",
+				});
+			}
+
+			// For now, just return the share URL
+			// In a full implementation, you might add a 'isPublic' field to the session
+			const shareUrl = `${req.protocol}://${req.get("host")}/practice/shared/${
+				session._id
+			}`;
+
+			res.json({
+				success: true,
+				message: "Session shared successfully",
+				data: { shareUrl },
+			});
+		} catch (error) {
+			console.error("Share session error:", error);
+			res.status(500).json({
+				success: false,
+				message: "Failed to share session",
+			});
+		}
+	}
+);
 
 export default PracticeRouter;

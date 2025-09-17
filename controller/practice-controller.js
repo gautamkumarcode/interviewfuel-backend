@@ -17,63 +17,85 @@ export const createPracticeSession = async (req, res) => {
 		}
 
 		const { settings = {} } = req.body;
-		const useAI = settings.source === "ai"; // flag to control AI mode
-
+		const useAI = settings.source === "ai";
 		let selectedQuestions = [];
 
 		if (useAI) {
-			const aiQuestions = await generateQuestions({
-				topic: settings.topic || "Frontend",
-				difficulty: settings.difficulty || "Medium",
-				count: settings.questionCount || 5,
-			});
+			// Generate AI questions
+			try {
+				const aiQuestions = await generateQuestions({
+					topic: settings.topic || "Frontend Development",
+					difficulty: settings.difficulty || "Medium",
+					count: settings.questionCount || 5,
+				});
 
-			selectedQuestions = aiQuestions.map((q) => ({
-				title: typeof q.title === "object" ? q.title.text : q.title,
-				content: typeof q.content === "object" ? q.content.text : q.content,
-				difficulty: settings.difficulty || "Mixed",
-				timeLimit: q.timeLimit || 120,
-				source: "ai",
-			}));
+				selectedQuestions = aiQuestions.map((q, index) => ({
+					aiGenerated: true,
+					title: typeof q.title === "object" ? q.title.text : q.title,
+					content: typeof q.content === "object" ? q.content.text : q.content,
+					difficulty: settings.difficulty || "Medium",
+					timeLimit: q.timeLimit || 120,
+					source: "ai",
+					startedAt: new Date(),
+				}));
+			} catch (aiError) {
+				console.error("AI question generation failed:", aiError);
+				return res.status(500).json({
+					success: false,
+					message:
+						"Failed to generate AI questions. Please try again or use database questions.",
+				});
+			}
 		} else {
+			// Use database questions
 			const questionQuery = { status: "published" };
 
-			if (settings.difficulty && settings.difficulty !== "Mixed")
+			if (settings.difficulty && settings.difficulty !== "Mixed") {
 				questionQuery.difficulty = settings.difficulty;
+			}
 
-			if (settings.categories?.length > 0)
+			if (settings.categories?.length > 0) {
 				questionQuery.category = { $in: settings.categories };
+			}
 
 			let dbQuestions = await Question.find(questionQuery)
-				.select("_id title difficulty category timeLimit")
+				.select("_id title content difficulty category timeLimit")
 				.populate("category", "name");
 
-			if (settings.randomOrder !== false)
+			if (dbQuestions.length === 0) {
+				return res.status(400).json({
+					success: false,
+					message:
+						"No questions found matching your criteria. Please adjust your settings.",
+				});
+			}
+
+			if (settings.randomOrder !== false) {
 				dbQuestions = dbQuestions.sort(() => Math.random() - 0.5);
+			}
 
 			const questionCount = Math.min(
 				settings.questionCount || 5,
 				dbQuestions.length
 			);
 
-			dbQuestions = dbQuestions.slice(0, questionCount);
-
-			selectedQuestions = dbQuestions.map((q) => ({
+			selectedQuestions = dbQuestions.slice(0, questionCount).map((q) => ({
 				question: q._id,
+				aiGenerated: false,
+				title: q.title,
+				content: q.content,
+				difficulty: q.difficulty,
+				timeLimit: q.timeLimit || 120,
+				source: "db",
 				startedAt: new Date(),
 			}));
 		}
 
-		// Create session
+		// Create practice session
 		const practiceSession = new PracticeSession({
 			user: req.user.id,
-			questions: useAI
-				? selectedQuestions.map((q) => ({
-						aiGenerated: true,
-						...q,
-						startedAt: new Date(),
-				  }))
-				: selectedQuestions,
+			title: `${useAI ? "AI" : "Database"} Practice Session`,
+			questions: selectedQuestions,
 			settings: {
 				duration: settings.duration || 60,
 				questionCount: selectedQuestions.length,
@@ -84,25 +106,30 @@ export const createPracticeSession = async (req, res) => {
 				source: useAI ? "ai" : "db",
 				topic: settings.topic,
 			},
+			status: "active",
 		});
 
 		await practiceSession.save();
 
+		// Populate database questions if needed
 		if (!useAI) {
 			await practiceSession.populate(
 				"questions.question",
-				"title difficulty category timeLimit"
+				"title content difficulty category timeLimit"
 			);
 		}
 
 		res.status(201).json({
 			success: true,
-			message: "Practice session created",
+			message: "Practice session created successfully",
 			data: { session: practiceSession },
 		});
 	} catch (error) {
 		console.error("Create session error:", error);
-		res.status(500).json({ success: false, message: "Server error" });
+		res.status(500).json({
+			success: false,
+			message: "Failed to create practice session",
+		});
 	}
 };
 
@@ -135,7 +162,11 @@ export const submitAnswer = async (req, res) => {
 	try {
 		const errors = validationResult(req);
 		if (!errors.isEmpty()) {
-			return res.status(400).json({ success: false, errors: errors.array() });
+			return res.status(400).json({
+				success: false,
+				message: "Validation failed",
+				errors: errors.array(),
+			});
 		}
 
 		const { answers } = req.body;
@@ -144,155 +175,151 @@ export const submitAnswer = async (req, res) => {
 			"title richAnswer content difficulty timeLimit"
 		);
 
-		if (!session)
-			return res
-				.status(404)
-				.json({ success: false, message: "Session not found" });
+		if (!session) {
+			return res.status(404).json({
+				success: false,
+				message: "Session not found",
+			});
+		}
 
-		if (session.user.toString() !== req.user.id)
-			return res
-				.status(403)
-				.json({ success: false, message: "Not authorized" });
+		if (session.user.toString() !== req.user.id) {
+			return res.status(403).json({
+				success: false,
+				message: "Not authorized",
+			});
+		}
 
-		// 1. Build QA list for Gemini AI
-		const qaList = answers.map(({ questionIndex, answer }) => {
+		// Build QA list for AI evaluation
+		const qaList = [];
+		const processedAnswers = [];
+
+		for (const { questionIndex, answer, timeSpent } of answers) {
 			const sessionQuestion = session.questions[questionIndex];
 			if (!sessionQuestion) {
-				throw new Error(`Invalid question index: ${questionIndex}`);
+				console.warn(`Invalid question index: ${questionIndex}`);
+				continue;
 			}
 
-			// Handle AI-generated questions vs DB questions differently
-			let questionObj;
+			// Get question data based on source
+			let questionData;
 			if (sessionQuestion.aiGenerated) {
-				// For AI-generated questions, the question data is directly in the session
-				questionObj = sessionQuestion;
+				questionData = {
+					title: sessionQuestion.title,
+					content: sessionQuestion.content,
+					richAnswer: null, // AI questions don't have model answers
+				};
 			} else {
-				// For DB questions, we need the populated question object
-				questionObj = sessionQuestion.question;
-				if (!questionObj) {
-					throw new Error(`Question not found for index: ${questionIndex}`);
+				questionData = sessionQuestion.question;
+				if (!questionData) {
+					console.warn(`Question not found for index: ${questionIndex}`);
+					continue;
 				}
 			}
 
-			return {
-				question: questionObj.title,
-				// For DB questions use richAnswer, for AI questions don't provide model answer
-				modelAnswer: sessionQuestion.aiGenerated
-					? undefined
-					: questionObj.richAnswer || "No model answer provided",
+			// Add to QA list for evaluation
+			qaList.push({
+				question: questionData.title,
+				modelAnswer: questionData.richAnswer || undefined,
 				userAnswer: answer,
-			};
-		});
+			});
 
-		console.log("QA List for evaluation:", JSON.stringify(qaList, null, 2));
+			// Store processed answer data
+			processedAnswers.push({
+				questionIndex,
+				answer,
+				timeSpent: timeSpent || 0,
+				sessionQuestion,
+				questionData,
+			});
+		}
 
-		// 2. Get AI evaluation
-		const aiResults = await evaluateAnswer(qaList);
+		// Get AI evaluation with fallback handling
+		let aiResults = null;
+		try {
+			if (qaList.length > 0) {
+				aiResults = await evaluateAnswer(qaList);
+			}
+		} catch (error) {
+			console.error("AI evaluation error:", error);
+		}
 
+		// Create fallback results if AI evaluation failed
 		if (
 			!aiResults ||
 			!Array.isArray(aiResults) ||
-			aiResults.length !== answers.length
+			aiResults.length !== qaList.length
 		) {
-			console.error("AI evaluation failed, providing fallback results");
-			// Provide fallback results when AI evaluation fails
-			const fallbackResults = answers.map(
-				({ questionIndex, answer }, index) => ({
-					question: qaList[index]?.question || "Unknown question",
-					userAnswer: answer,
-					isCorrect: false,
-					feedback:
-						"AI evaluation temporarily unavailable. Your answer has been recorded.",
-					score: 5, // Neutral score when evaluation fails
-				})
+			console.warn(
+				"AI evaluation failed or returned invalid results, using fallback"
 			);
+			aiResults = qaList.map((qa, index) => ({
+				question: qa.question,
+				userAnswer: qa.userAnswer,
+				isCorrect: false,
+				feedback:
+					"AI evaluation temporarily unavailable. Your answer has been recorded.",
+				score: 5, // Neutral score
+				notes: "Fallback evaluation",
+			}));
+		}
 
-			// Continue with saving the answers even if evaluation fails
-			for (let i = 0; i < answers.length; i++) {
-				const { questionIndex, answer, timeSpent } = answers[i];
-				const sessionQuestion = session.questions[questionIndex];
+		// Save results to session and create attempts
+		for (let i = 0; i < processedAnswers.length; i++) {
+			const { questionIndex, answer, timeSpent, sessionQuestion } =
+				processedAnswers[i];
+			const evaluation = aiResults[i] || {
+				isCorrect: false,
+				score: 5,
+				feedback: "Evaluation unavailable",
+				notes: "Fallback",
+			};
 
-				if (!sessionQuestion) continue;
+			// Update session question
+			session.questions[questionIndex].answer = answer;
+			session.questions[questionIndex].timeSpent = timeSpent;
+			session.questions[questionIndex].completedAt = new Date();
+			session.questions[questionIndex].score = evaluation.score;
+			session.questions[questionIndex].isCorrect = evaluation.isCorrect;
+			session.questions[questionIndex].feedback = evaluation.feedback || "";
+			session.questions[questionIndex].notes = evaluation.notes || "";
 
-				// Update session question
-				session.questions[questionIndex] = {
-					...(sessionQuestion._doc || sessionQuestion),
-					answer,
-					timeSpent: timeSpent || 0,
-					completedAt: new Date(),
-				};
+			// Create attempt record
+			const questionId = sessionQuestion.aiGenerated
+				? `ai_${sessionQuestion._id || questionIndex}`
+				: sessionQuestion.question._id;
 
-				// For AI-generated questions, create a temporary question ID or handle differently
-				const questionId = sessionQuestion.aiGenerated
-					? sessionQuestion._id || `ai_${questionIndex}`
-					: sessionQuestion.question._id;
-
-				// Save to attempts with fallback data
+			try {
 				await Attempt.create({
 					user: req.user.id,
 					practiceSession: session._id,
 					question: questionId,
 					answer,
-					score: fallbackResults[i].score,
-					feedback: fallbackResults[i].feedback,
-					notes: "AI evaluation failed",
+					score: evaluation.score,
+					feedback: evaluation.feedback,
+					notes: evaluation.notes,
 					timeSpent,
 				});
+			} catch (attemptError) {
+				console.error("Failed to create attempt:", attemptError);
+				// Continue processing other answers even if one attempt fails
 			}
-
-			await session.save();
-
-			return res.json({
-				success: true,
-				message: "Answers submitted (evaluation fallback applied)",
-				data: fallbackResults,
-			});
 		}
 
-		// 3. Save results to PracticeSession + Attempt
-		for (let i = 0; i < answers.length; i++) {
-			const { questionIndex, answer, timeSpent } = answers[i];
-			const result = aiResults[i];
-			const sessionQuestion = session.questions[questionIndex];
-
-			if (!sessionQuestion) continue;
-
-			// Update session question
-			session.questions[questionIndex] = {
-				...(sessionQuestion._doc || sessionQuestion),
-				answer,
-				timeSpent: timeSpent || 0,
-				completedAt: new Date(),
-			};
-
-			// For AI-generated questions, create a temporary question ID or handle differently
-			const questionId = sessionQuestion.aiGenerated
-				? sessionQuestion._id || `ai_${questionIndex}`
-				: sessionQuestion.question._id;
-
-			// Save to attempts
-			await Attempt.create({
-				user: req.user.id,
-				practiceSession: session._id,
-				question: questionId,
-				answer,
-				score: result.score,
-				feedback: result.feedback,
-				notes: result.notes,
-				timeSpent,
-			});
-		}
-
+		// Save session with all updates
+		session.markModified("questions");
 		await session.save();
 
 		res.json({
 			success: true,
-			message: "Answers submitted and evaluated",
+			message: "Answers submitted and evaluated successfully",
 			data: aiResults,
 		});
 	} catch (error) {
 		console.error("Submit answer error:", error);
-		res.status(500).json({ success: false, message: "Server error" });
+		res.status(500).json({
+			success: false,
+			message: "Server error occurred while processing answers",
+		});
 	}
 };
 
@@ -390,46 +417,83 @@ export const submitAnswer = async (req, res) => {
 export const completeSession = async (req, res) => {
 	try {
 		const session = await PracticeSession.findById(req.params.id);
-		if (!session)
-			return res
-				.status(404)
-				.json({ success: false, message: "Session not found" });
 
-		if (session.user.toString() !== req.user.id)
-			return res
-				.status(403)
-				.json({ success: false, message: "Not authorized" });
+		if (!session) {
+			return res.status(404).json({
+				success: false,
+				message: "Session not found",
+			});
+		}
 
+		if (session.user.toString() !== req.user.id) {
+			return res.status(403).json({
+				success: false,
+				message: "Not authorized",
+			});
+		}
+
+		// Prevent completing an already completed session
+		if (session.status === "completed") {
+			return res.json({
+				success: true,
+				message: "Session already completed",
+				data: { session },
+			});
+		}
+
+		// Complete the session and calculate results
 		await session.complete();
 
-		const user = await User.findById(req.user.id);
-		user.stats.totalSessions += 1;
-		user.stats.questionsAnswered += session.results.answeredQuestions;
+		// Update user statistics
+		try {
+			const user = await User.findById(req.user.id);
+			if (user && user.stats) {
+				const currentSessions = user.stats.totalSessions || 0;
+				const newSessionCount = currentSessions + 1;
 
-		user.stats.completionRate = Math.round(
-			(user.stats.completionRate * (user.stats.totalSessions - 1) +
-				session.results.completionRate) /
-				user.stats.totalSessions
-		);
+				user.stats.totalSessions = newSessionCount;
+				user.stats.questionsAnswered =
+					(user.stats.questionsAnswered || 0) +
+					session.results.answeredQuestions;
 
-		user.stats.averageTime =
-			Math.round(
-				((user.stats.averageTime * (user.stats.totalSessions - 1) +
-					session.results.averageTimePerQuestion) /
-					user.stats.totalSessions) *
-					10
-			) / 10;
+				// Calculate weighted averages
+				const currentCompletionRate = user.stats.completionRate || 0;
+				user.stats.completionRate = Math.round(
+					(currentCompletionRate * currentSessions +
+						session.results.completionRate) /
+						newSessionCount
+				);
 
-		await user.save();
+				const currentAvgTime = user.stats.averageTime || 0;
+				user.stats.averageTime =
+					Math.round(
+						((currentAvgTime * currentSessions +
+							session.results.averageTimePerQuestion) /
+							newSessionCount) *
+							10
+					) / 10;
+
+				await user.save();
+			}
+		} catch (userUpdateError) {
+			console.error("Failed to update user stats:", userUpdateError);
+			// Don't fail the session completion if user stats update fails
+		}
 
 		res.json({
 			success: true,
-			message: "Session completed",
-			data: { session },
+			message: "Session completed successfully",
+			data: {
+				session,
+				finalResults: session.results,
+			},
 		});
 	} catch (error) {
 		console.error("Complete session error:", error);
-		res.status(500).json({ success: false, message: "Server error" });
+		res.status(500).json({
+			success: false,
+			message: "Failed to complete session",
+		});
 	}
 };
 
