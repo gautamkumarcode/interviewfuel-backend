@@ -4,6 +4,7 @@ import { auth } from "../middleware/auth.js";
 import optionalAuth from "../middleware/optionalAuth.js";
 
 import {
+	bookmarkQuestion,
 	createMultipleQuestions,
 	createQuestion,
 	deleteQuestion,
@@ -74,5 +75,6 @@ QuestionsRouter.post(
 
 QuestionsRouter.delete("/:id", auth, deleteQuestion);
 QuestionsRouter.post("/:id/like", auth, likeQuestion);
+QuestionsRouter.post("/:id/bookmark", auth, bookmarkQuestion);
 
 export default QuestionsRouter;

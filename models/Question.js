@@ -116,6 +116,41 @@ const questionSchema = new mongoose.Schema(
 			trim: true,
 			lowercase: true,
 		},
+		likedBy: [
+			{
+				type: mongoose.Schema.Types.ObjectId,
+				ref: "User",
+			},
+		],
+		bookmarkedBy: [
+			{
+				type: mongoose.Schema.Types.ObjectId,
+				ref: "User",
+			},
+		],
+		reviewers: [
+			{
+				type: mongoose.Schema.Types.ObjectId,
+				ref: "User",
+			},
+		],
+		reviewStatus: {
+			type: String,
+			enum: ["pending", "in_review", "approved", "rejected"],
+			default: "pending",
+		},
+		reviewComments: [
+			{
+				reviewer: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+				comment: String,
+				date: { type: Date, default: Date.now },
+			},
+		],
+		lastReviewedAt: Date,
+		publishedAt: {
+			type: Date,
+			default: Date.now,
+		},
 	},
 	{
 		timestamps: true,

@@ -325,13 +325,33 @@ import Question from "../models/Question.js";
 
 	// Like Question
 	export const likeQuestion = async (req, res) => {
+		const userId = req.user._id;
+
+		console.log("userId:", userId);
 		try {
 			const question = await Question.findById(req.params.id);
 			if (!question) {
-				return res.status(404).json({ success: false, message: "Question not found" });
+				return res
+					.status(404)
+					.json({ success: false, message: "Question not found" });
 			}
 
 			await question.toggleLike(true);
+			if (!question.likedBy.includes(userId)) {
+				await question.likedBy.push(userId);
+				await question.save();
+			} else {
+				await question.toggleLike(false);
+				await question.likedBy.pull(userId);
+				await question.save();
+
+				return res.json({
+					success: true,
+					message: "Question unliked",
+					data: { likes: question.stats.likes },
+				});
+			}
+
 			res.json({
 				success: true,
 				message: "Question liked",
@@ -342,6 +362,42 @@ import Question from "../models/Question.js";
 			res.status(500).json({ success: false, message: "Server error" });
 		}
 	};
+
+	export const bookmarkQuestion = async (req, res) => {
+		const userId = req.user._id;
+		try {
+			const question = await Question.findById(req.params.id);
+			if (!question) {
+				return res
+
+					.status(404)
+					.json({ success: false, message: "Question not found" });
+			}
+			await question.toggleBookmark(true);
+			if (!question.bookmarkedBy.includes(userId)) {
+				await question.bookmarkedBy.push(userId);
+				await question.save();
+			} else {
+				await question.toggleBookmark(false);
+				await question.bookmarkedBy.pull(userId);
+				await question.save();
+				return res.json({
+					success: true,
+					message: "Question unbookmarked",
+					data: { bookmarks: question.stats.bookmarks },
+				});
+			}
+			res.json({
+				success: true,
+				message: "Question bookmarked",
+				data: { bookmarks: question.stats.bookmarks },
+			});
+		} catch (err) {
+			console.error("Bookmark question error:", err);
+			res.status(500).json({ success: false, message: "Server error" });
+		}
+	};
+
 
 	// Get Most Popular Questions
 	export const getPopularQuestions = async (req, res) => {
