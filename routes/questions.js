@@ -4,14 +4,21 @@ import { auth } from "../middleware/auth.js";
 import optionalAuth from "../middleware/optionalAuth.js";
 
 import {
+	addComment,
 	bookmarkQuestion,
 	createMultipleQuestions,
 	createQuestion,
+	deleteComment,
 	deleteQuestion,
+	editComment,
+	getComments,
 	getPopularQuestions,
 	getQuestions,
+	getRelatedQuestions,
 	getSingleQuestion,
+	likeComment,
 	likeQuestion,
+	setRelatedQuestions,
 	updateQuestion,
 } from "../controller/questions-controller.js";
 
@@ -23,7 +30,7 @@ QuestionsRouter.get(
 		query("page").optional().isInt({ min: 1 }),
 		query("limit").optional().isInt({ min: 1, max: 100 }),
 		query("difficulty").optional().isIn(["Easy", "Medium", "Hard"]),
-		query("category").optional().isMongoId(),
+		query("category").optional(),
 		query("search").optional().trim().isLength({ min: 1, max: 100 }),
 	],
 	getQuestions
@@ -56,6 +63,31 @@ QuestionsRouter.put(
 		body("difficulty").optional().isIn(["Easy", "Medium", "Hard"]),
 	],
 	updateQuestion
+);
+
+// Comment routes
+QuestionsRouter.get("/:questionId/comments", optionalAuth, getComments);
+QuestionsRouter.post("/:questionId/comments/add", auth, addComment);
+QuestionsRouter.post(
+	"/:questionId/comments/:commentId/like",
+	auth,
+	likeComment
+);
+QuestionsRouter.put(
+	"/:questionId/comments/:commentId",
+	auth,
+	[body("content").trim().isLength({ min: 1, max: 1000 })],
+	editComment
+);
+QuestionsRouter.delete("/:questionId/comments/:commentId", auth, deleteComment);
+
+// Related questions routes
+QuestionsRouter.get("/:questionId/related", getRelatedQuestions);
+QuestionsRouter.put(
+	"/:questionId/related",
+	auth,
+	[body("relatedQuestionIds").optional().isArray()],
+	setRelatedQuestions
 );
 
 QuestionsRouter.post(
