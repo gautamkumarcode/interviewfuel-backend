@@ -15,7 +15,17 @@ const attemptSchema = new mongoose.Schema(
 		question: {
 			type: mongoose.Schema.Types.ObjectId,
 			ref: "Question",
-			required: true,
+			required: false, // Make optional to handle AI-generated questions
+		},
+		questionType: {
+			type: String,
+			enum: ["database", "ai"],
+			default: "database",
+		},
+		aiQuestionData: {
+			title: String,
+			content: String,
+			difficulty: String,
 		},
 		answer: {
 			type: String,

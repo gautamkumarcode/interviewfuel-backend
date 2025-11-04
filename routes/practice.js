@@ -29,10 +29,7 @@ PracticeRouter.post(
 			.optional()
 			.isIn(["Easy", "Medium", "Hard", "Mixed"])
 			.withMessage("Invalid difficulty level"),
-		body("settings.categories")
-			.optional()
-			.isArray({ min: 1 })
-			.withMessage("Categories should be an array of category IDs"),
+		body("settings.categories").optional(),
 	],
 	createPracticeSession
 );
@@ -79,6 +76,44 @@ PracticeRouter.put(
 
 // Get all sessions of logged-in user
 PracticeRouter.get("/sessions", auth, getUserSessions);
+
+// Test AI evaluation endpoint
+PracticeRouter.post("/test-ai", auth, async (req, res) => {
+	try {
+		const { evaluateAnswer } = await import("../utils/gemini.js");
+
+		const testQA = [
+			{
+				question: "What is React?",
+				userAnswer:
+					"React is a JavaScript library for building user interfaces.",
+				modelAnswer:
+					"React is a JavaScript library for building user interfaces, particularly web applications.",
+			},
+		];
+
+		console.log("🧪 Testing AI evaluation...");
+		const result = await evaluateAnswer(testQA);
+
+		res.json({
+			success: true,
+			message: "AI evaluation test completed",
+			data: {
+				result: result,
+				hasApiKey: !!process.env.GEMINI_API_KEY,
+				apiKeyLength: process.env.GEMINI_API_KEY?.length || 0,
+				modelUsed: "gemini-1.5-pro",
+			},
+		});
+	} catch (error) {
+		console.error("AI test error:", error);
+		res.status(500).json({
+			success: false,
+			message: "AI evaluation test failed",
+			error: error.message,
+		});
+	}
+});
 
 // Share session (make it publicly accessible)
 PracticeRouter.post(

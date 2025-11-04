@@ -23,26 +23,94 @@ export const createPracticeSession = async (req, res) => {
 		if (useAI) {
 			// Generate AI questions
 			try {
+				const startTime = Date.now();
+
+				// Determine topic for AI generation
+				let topic = "Frontend Development"; // default topic
+				let topicSource = "default";
+
+				// Priority 1: Custom topic (user input)
+				if (settings.customTopic?.trim()) {
+					topic = settings.customTopic.trim();
+					topicSource = "custom";
+				}
+				// Priority 2: Category from database
+				else if (settings.categories?.length > 0) {
+					try {
+						const Category = (await import("../models/Category.js")).default;
+						const category = await Category.findById(settings.categories[0]);
+						if (category) {
+							topic = category.name;
+							topicSource = "category";
+						}
+					} catch (error) {
+						console.warn("Failed to fetch category for AI topic:", error);
+					}
+				}
+
+				// Calculate intelligent time distribution
+				const totalSessionMinutes = settings.duration || 60;
+				const questionCount = settings.questionCount || 5;
+				const calculatedTimePerQuestion = Math.floor(
+					(totalSessionMinutes * 60) / questionCount
+				);
+
 				const aiQuestions = await generateQuestions({
-					topic: settings.topic || "Frontend Development",
+					topic: topic, // Use the determined topic (custom or category)
 					difficulty: settings.difficulty || "Medium",
-					count: settings.questionCount || 5,
+					count: questionCount,
+					sessionDuration: totalSessionMinutes,
+					calculatedTimePerQuestion: calculatedTimePerQuestion,
+					isCustomTopic: topicSource === "custom",
 				});
 
-				selectedQuestions = aiQuestions.map((q, index) => ({
-					aiGenerated: true,
-					title: typeof q.title === "object" ? q.title.text : q.title,
-					content: typeof q.content === "object" ? q.content.text : q.content,
-					difficulty: settings.difficulty || "Medium",
-					timeLimit: q.timeLimit || 120,
-					source: "ai",
-					startedAt: new Date(),
-				}));
+				const generationTime = Date.now() - startTime;
+				console.log(`AI questions generated in ${generationTime}ms`);
+
+				// Ensure time limits add up to total session duration
+				const totalSessionSeconds = totalSessionMinutes * 60;
+				let totalQuestionTime = 0;
+
+				// First pass: collect AI-generated times
+				const questionsWithTime = aiQuestions.map((q, index) => {
+					const questionTime = q.timeLimit || calculatedTimePerQuestion;
+					totalQuestionTime += questionTime;
+					return {
+						aiGenerated: true,
+						title: typeof q.title === "object" ? q.title.text : q.title,
+						content: typeof q.content === "object" ? q.content.text : q.content,
+						difficulty: settings.difficulty || "Medium",
+						timeLimit: questionTime,
+						source: "ai",
+						startedAt: new Date(),
+					};
+				});
+
+				// Adjust times to match session duration exactly
+				if (totalQuestionTime !== totalSessionSeconds) {
+					const timeDifference = totalSessionSeconds - totalQuestionTime;
+					const adjustmentPerQuestion = Math.floor(
+						timeDifference / questionCount
+					);
+					const remainder = timeDifference % questionCount;
+
+					questionsWithTime.forEach((q, index) => {
+						q.timeLimit += adjustmentPerQuestion;
+						// Distribute remainder to first few questions
+						if (index < remainder) {
+							q.timeLimit += 1;
+						}
+						// Ensure minimum 60 seconds per question
+						q.timeLimit = Math.max(60, q.timeLimit);
+					});
+				}
+
+				selectedQuestions = questionsWithTime;
 			} catch (aiError) {
-				console.error("AI question generation failed:", aiError);
 				return res.status(500).json({
 					success: false,
 					message:
+						aiError.message ||
 						"Failed to generate AI questions. Please try again or use database questions.",
 				});
 			}
@@ -79,16 +147,25 @@ export const createPracticeSession = async (req, res) => {
 				dbQuestions.length
 			);
 
-			selectedQuestions = dbQuestions.slice(0, questionCount).map((q) => ({
-				question: q._id,
-				aiGenerated: false,
-				title: q.title,
-				content: q.content,
-				difficulty: q.difficulty,
-				timeLimit: q.timeLimit || 120,
-				source: "db",
-				startedAt: new Date(),
-			}));
+			// Apply smart time distribution to database questions too
+			const totalSessionMinutes = settings.duration || 60;
+			const totalSessionSeconds = totalSessionMinutes * 60;
+			const calculatedTimePerQuestion = Math.floor(
+				totalSessionSeconds / questionCount
+			);
+
+			selectedQuestions = dbQuestions
+				.slice(0, questionCount)
+				.map((q, index) => ({
+					question: q._id,
+					aiGenerated: false,
+					title: q.title,
+					content: q.content,
+					difficulty: q.difficulty,
+					timeLimit: calculatedTimePerQuestion, // Use calculated time instead of database time
+					source: "db",
+					startedAt: new Date(),
+				}));
 		}
 
 		// Create practice session
@@ -237,10 +314,19 @@ export const submitAnswer = async (req, res) => {
 		let aiResults = null;
 		try {
 			if (qaList.length > 0) {
+				console.log(`Attempting AI evaluation for ${qaList.length} answers...`);
 				aiResults = await evaluateAnswer(qaList);
+
+				if (aiResults) {
+					console.log(
+						`✅ AI evaluation successful: ${aiResults.length} results`
+					);
+				} else {
+					console.warn("⚠️ AI evaluation returned null, using fallback");
+				}
 			}
 		} catch (error) {
-			console.error("AI evaluation error:", error);
+			console.error("❌ AI evaluation error:", error);
 		}
 
 		// Create fallback results if AI evaluation failed
@@ -283,22 +369,38 @@ export const submitAnswer = async (req, res) => {
 			session.questions[questionIndex].feedback = evaluation.feedback || "";
 			session.questions[questionIndex].notes = evaluation.notes || "";
 
-			// Create attempt record
-			const questionId = sessionQuestion.aiGenerated
-				? `ai_${sessionQuestion._id || questionIndex}`
-				: sessionQuestion.question._id;
-
+			// Create attempt record for both database and AI-generated questions
 			try {
-				await Attempt.create({
+				const attemptData = {
 					user: req.user.id,
 					practiceSession: session._id,
-					question: questionId,
 					answer,
 					score: evaluation.score,
 					feedback: evaluation.feedback,
 					notes: evaluation.notes,
 					timeSpent,
-				});
+				};
+
+				if (sessionQuestion.aiGenerated) {
+					// For AI-generated questions
+					attemptData.questionType = "ai";
+					attemptData.aiQuestionData = {
+						title: sessionQuestion.title,
+						content: sessionQuestion.content,
+						difficulty: sessionQuestion.difficulty,
+					};
+				} else {
+					// For database questions
+					attemptData.questionType = "database";
+					attemptData.question = sessionQuestion.question._id;
+				}
+
+				await Attempt.create(attemptData);
+				console.log(
+					`✅ Attempt created for ${
+						sessionQuestion.aiGenerated ? "AI" : "database"
+					} question at index ${questionIndex}`
+				);
 			} catch (attemptError) {
 				console.error("Failed to create attempt:", attemptError);
 				// Continue processing other answers even if one attempt fails
