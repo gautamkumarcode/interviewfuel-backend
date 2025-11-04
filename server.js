@@ -15,6 +15,7 @@ import "./database/intialdb.js";
 import errorHandler from "./middleware/errorHandler.js";
 import notFound from "./middleware/notFound.js";
 import AchievementRouter from "./routes/achievements.js";
+import AnalyticsRouter from "./routes/analytics.js";
 import AuthRouter from "./routes/auth.js";
 import CategoriesRouter from "./routes/categories.js";
 import PracticeRouter from "./routes/practice.js";
@@ -89,6 +90,7 @@ app.use("/api/questions", QuestionsRouter);
 app.use("/api/practice", PracticeRouter);
 app.use("/api/achievements", AchievementRouter);
 app.use("/api/users", UserRouter);
+app.use("/api/analytics", AnalyticsRouter);
 
 // Fallback route for undefined routes
 
