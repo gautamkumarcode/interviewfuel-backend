@@ -140,11 +140,24 @@ export const createQuestion = async (req, res) => {
 			.replace(/(^-|-$)+/g, "")
 			.concat("-", Date.now().toString(36).slice(-4)); // Ensure uniqueness
 
+		// Set reviewStatus based on user role
+		const reviewStatus = req.user.role === "admin" ? "approved" : "pending";
+		const status =
+			req.user.role === "admin" ? req.body.status || "published" : "draft";
+
 		const question = new Question({
 			...req.body,
 			author: req.user.id,
 			tags: req.body.tags?.map((tag) => tag.trim().toLowerCase()) || [],
 			slug,
+			reviewStatus,
+			status,
+			// If admin creates, auto-verify
+			...(req.user.role === "admin" && {
+				isVerified: true,
+				verifiedBy: req.user.id,
+				verifiedAt: new Date(),
+			}),
 		});
 
 		await question.save();
@@ -154,7 +167,10 @@ export const createQuestion = async (req, res) => {
 
 		res.status(201).json({
 			success: true,
-			message: "Question created",
+			message:
+				req.user.role === "admin"
+					? "Question created and published"
+					: "Question created and submitted for review",
 			data: { question },
 		});
 	} catch (err) {
@@ -371,11 +387,11 @@ export const likeQuestion = async (req, res) => {
 
 		await question.toggleLike(true);
 		if (!question.likedBy.includes(userId)) {
-			await question.likedBy.push(userId);
+			question.likedBy.push(userId);
 			await question.save();
 		} else {
 			await question.toggleLike(false);
-			await question.likedBy.pull(userId);
+			question.likedBy.pull(userId);
 			await question.save();
 
 			return res.json({
@@ -408,11 +424,11 @@ export const bookmarkQuestion = async (req, res) => {
 		}
 		await question.toggleBookmark(true);
 		if (!question.bookmarkedBy.includes(userId)) {
-			await question.bookmarkedBy.push(userId);
+			question.bookmarkedBy.push(userId);
 			await question.save();
 		} else {
 			await question.toggleBookmark(false);
-			await question.bookmarkedBy.pull(userId);
+			question.bookmarkedBy.pull(userId);
 			await question.save();
 			return res.json({
 				success: true,
@@ -850,3 +866,344 @@ const getRelatedQuestionsForQuestion = async (question, limit = 5) => {
 
 	return relatedQuestions.slice(0, limit);
 };
+
+export const getMyQuestions = async (req, res) => {
+	try {
+		const userId = req.user._id;
+		const questions = await Question.find({ author: userId })
+			.populate("category", "name slug color")
+			.select(
+				"id category stats title tags difficulty timeLimit slug createdAt updatedAt status"
+			)
+			.sort({ createdAt: -1 });
+		res.json({
+			success: true,
+			data: {
+				results: questions,
+				pagination: {
+					total: questions.length,
+				},
+			},
+		});
+	} catch (error) {
+		console.error("Get my questions error:", error);
+		res.status(500).json({ success: false, message: "Server error" });
+	}
+};
+
+export const getBookmarkedQuestions = async (req, res) => {
+	try {
+		const userId = req.user._id;
+		const questions = await Question.find({ bookmarkedBy: userId })
+			.populate("category", "name slug color")
+			.select(
+				"id category stats title tags difficulty timeLimit slug createdAt updatedAt"
+			)
+			.sort({ createdAt: -1 });
+		res.json({
+			success: true,
+			data: {
+				results: questions,
+				pagination: {
+					total: questions.length,
+				},
+			},
+		});
+	} catch (error) {
+		console.error("Get bookmarked questions error:", error);
+		res.status(500).json({ success: false, message: "Server error" });
+	}
+};
+export const getLikedQuestions = async (req, res) => {
+	try {
+		const userId = req.user._id;
+		const questions = await Question.find({ likedBy: userId })
+			.populate("category", "name slug color")
+			.select(
+				"id category stats title tags difficulty timeLimit slug createdAt updatedAt"
+			)
+			.sort({ createdAt: -1 });
+		res.json({
+			success: true,
+			data: {
+				results: questions,
+				pagination: {
+					total: questions.length,
+				},
+			},
+		});
+	} catch (error) {
+		console.error("Get liked questions error:", error);
+		res.status(500).json({ success: false, message: "Server error" });
+	}
+};
+
+export const getAdminQuestions = async (req, res) => {
+	try {
+		const questions = await Question.find()
+			.populate("category", "name slug color")
+			.select(
+				"id category stats title tags difficulty timeLimit slug createdAt updatedAt"
+			)
+			.sort({ createdAt: -1 });
+		res.json({
+			success: true,
+			data: {
+				results: questions,
+				pagination: {
+					total: questions.length,
+				},
+			},
+		});
+	} catch (error) {
+		console.error("Get admin questions error:", error);
+		res.status(500).json({ success: false, message: "Server error" });
+	}
+};
+
+// Get Pending Questions for Admin Review
+export const getPendingQuestions = async (req, res) => {
+	try {
+		const {
+			page = 1,
+			limit = 20,
+			reviewStatus = "pending",
+			difficulty,
+			category,
+		} = req.query;
+
+		const query = { reviewStatus };
+
+		if (difficulty) query.difficulty = difficulty;
+		if (category) query.category = category;
+
+		const questions = await Question.find(query)
+			.populate("category", "name slug color")
+			.populate("author", "name username email avatar")
+			.populate("reviewers", "name username")
+			.populate("reviewComments.reviewer", "name username")
+			.sort({ createdAt: -1 })
+			.skip((page - 1) * limit)
+			.limit(Number(limit));
+
+		const total = await Question.countDocuments(query);
+
+		res.json({
+			success: true,
+			data: {
+				results: questions,
+				pagination: {
+					current: Number(page),
+					pages: Math.ceil(total / limit),
+					total,
+					limit: Number(limit),
+				},
+			},
+		});
+	} catch (error) {
+		console.error("Get pending questions error:", error);
+		res.status(500).json({ success: false, message: "Server error" });
+	}
+};
+
+// Get Single Question for Admin Review (includes all details)
+export const getQuestionForReview = async (req, res) => {
+	try {
+		const { id } = req.params;
+
+		const question = await Question.findById(id)
+			.populate("category", "name slug color")
+			.populate("author", "name username email avatar bio")
+			.populate("reviewers", "name username avatar")
+			.populate("reviewComments.reviewer", "name username avatar")
+			.populate("relatedQuestions", "title difficulty category");
+
+		if (!question) {
+			return res
+				.status(404)
+				.json({ success: false, message: "Question not found" });
+		}
+
+		res.json({ success: true, data: question });
+	} catch (error) {
+		console.error("Get question for review error:", error);
+		res.status(500).json({ success: false, message: "Server error" });
+	}
+};
+
+// Update Question Review Status (Approve/Reject)
+export const updateQuestionReviewStatus = async (req, res) => {
+	try {
+		const errors = validationResult(req);
+		if (!errors.isEmpty()) {
+			return res.status(400).json({
+				success: false,
+				message: "Validation failed",
+				errors: errors.array(),
+			});
+		}
+
+		const { id } = req.params;
+		const { reviewStatus, comment } = req.body;
+		const adminId = req.user.id;
+
+		const question = await Question.findById(id);
+		if (!question) {
+			return res
+				.status(404)
+				.json({ success: false, message: "Question not found" });
+		}
+
+		// Update review status
+		question.reviewStatus = reviewStatus;
+		question.lastReviewedAt = new Date();
+
+		// Add reviewer to the list if not already present
+		if (!question.reviewers.includes(adminId)) {
+			question.reviewers.push(adminId);
+		}
+
+		// Add review comment if provided
+		if (comment) {
+			question.reviewComments.push({
+				reviewer: adminId,
+				comment,
+				date: new Date(),
+			});
+		}
+
+		// If approved, change status to published and set verification
+		if (reviewStatus === "approved") {
+			question.status = "published";
+			question.isVerified = true;
+			question.verifiedBy = adminId;
+			question.verifiedAt = new Date();
+		}
+
+		// If rejected, change status to draft
+		if (reviewStatus === "rejected") {
+			question.status = "draft";
+		}
+
+		await question.save();
+
+		// Populate for response
+		await question.populate("category", "name slug color");
+		await question.populate("author", "name username");
+		await question.populate("reviewers", "name username");
+		await question.populate("reviewComments.reviewer", "name username");
+
+		res.json({
+			success: true,
+			message: `Question ${reviewStatus} successfully`,
+			data: { question },
+		});
+	} catch (error) {
+		console.error("Update question review status error:", error);
+		res.status(500).json({ success: false, message: "Server error" });
+	}
+};
+
+// Add Review Comment to Question
+export const addReviewComment = async (req, res) => {
+	try {
+		const errors = validationResult(req);
+		if (!errors.isEmpty()) {
+			return res.status(400).json({
+				success: false,
+				message: "Validation failed",
+				errors: errors.array(),
+			});
+		}
+
+		const { id } = req.params;
+		const { comment } = req.body;
+		const adminId = req.user.id;
+
+		const question = await Question.findById(id);
+		if (!question) {
+			return res
+				.status(404)
+				.json({ success: false, message: "Question not found" });
+		}
+
+		// Add reviewer to the list if not already present
+		if (!question.reviewers.includes(adminId)) {
+			question.reviewers.push(adminId);
+		}
+
+		// Add review comment
+		question.reviewComments.push({
+			reviewer: adminId,
+			comment,
+			date: new Date(),
+		});
+
+		// Update review status to in_review if it was pending
+		if (question.reviewStatus === "pending") {
+			question.reviewStatus = "in_review";
+		}
+
+		await question.save();
+		await question.populate("reviewComments.reviewer", "name username avatar");
+
+		res.json({
+			success: true,
+			message: "Review comment added successfully",
+			data: {
+				reviewComments: question.reviewComments,
+				reviewStatus: question.reviewStatus,
+			},
+		});
+	} catch (error) {
+		console.error("Add review comment error:", error);
+		res.status(500).json({ success: false, message: "Server error" });
+	}
+};
+
+// Get Review Statistics for Admin Dashboard
+export const getReviewStatistics = async (req, res) => {
+	try {
+		const [pending, inReview, approved, rejected, total] = await Promise.all([
+			Question.countDocuments({ reviewStatus: "pending" }),
+			Question.countDocuments({ reviewStatus: "in_review" }),
+			Question.countDocuments({ reviewStatus: "approved" }),
+			Question.countDocuments({ reviewStatus: "rejected" }),
+			Question.countDocuments(),
+		]);
+
+		const recentReviews = await Question.find({
+			reviewStatus: { $in: ["approved", "rejected"] },
+		})
+			.sort({ lastReviewedAt: -1 })
+			.limit(10)
+			.populate("category", "name slug color")
+			.populate("author", "name username")
+			.populate("verifiedBy", "name username")
+			.select(
+				"title reviewStatus lastReviewedAt verifiedBy category author slug"
+			);
+
+		res.json({
+			success: true,
+			data: {
+				statistics: {
+					pending,
+					inReview,
+					approved,
+					rejected,
+					total,
+					approvalRate:
+						approved + rejected > 0
+							? ((approved / (approved + rejected)) * 100).toFixed(2)
+							: 0,
+				},
+				recentReviews,
+			},
+		});
+	} catch (error) {
+		console.error("Get review statistics error:", error);
+		res.status(500).json({ success: false, message: "Server error" });
+	}
+};
+
