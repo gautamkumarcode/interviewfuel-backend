@@ -21,14 +21,19 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Copy files to EC2
-        uses: appleboy/scp-action@v0.1.7
+      - name: SSH into EC2 and deploy
+        uses: appleboy/ssh-action@v0.1.7
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_KEY }}
-          source: "."
-          target: ${{ secrets.APP_DIR }}
+            host: ${{ secrets.EC2_HOST }}
+            username: ${{ secrets.EC2_USER }}
+            key: ${{ secrets.EC2_KEY }}
+            script: |
+              # Remove old files completely
+              rm -rf ${{ secrets.APP_DIR }}
+
+              # Recreate clean directory
+              mkdir -p ${{ secrets.APP_DIR }}
+              sudo chown -R ${{ secrets.EC2_USER }}:${{ secrets.EC2_USER }} ${{ secrets.APP_DIR }}
 
       - name: Restart app on EC2
         uses: appleboy/ssh-action@v0.1.7
