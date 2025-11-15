@@ -16,7 +16,6 @@ export const getAllAchievements = async (req, res) => {
 			data: { achievements },
 		});
 	} catch (error) {
-		console.error("Get achievements error:", error);
 		res.status(500).json({
 			success: false,
 			message: "Server error",
