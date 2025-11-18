@@ -21,28 +21,36 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Prepare EC2 for clean deploy
+      ##############################################
+      # 1. Create release folder (does NOT delete .env)
+      ##############################################
+      - name: Prepare EC2 release folder
         uses: appleboy/ssh-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_KEY }}
           script: |
-            sudo rm -rf ${{ secrets.APP_DIR }}
-            sudo mkdir -p ${{ secrets.APP_DIR }}
-            sudo chown -R ${{ secrets.EC2_USER }}:${{ secrets.EC2_USER }} ${{ secrets.APP_DIR }}
+            mkdir -p ${{ secrets.APP_DIR }}/release
+            echo "Release folder ready!"
 
-      - name: Upload files to EC2
+      ##############################################
+      # 2. Upload files to release folder
+      ##############################################
+      - name: Upload backend to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_KEY }}
           source: "."
-          target: "${{ secrets.APP_DIR }}"
+          target: "${{ secrets.APP_DIR }}/release"
           overwrite: true
 
-      - name: Start backend
+      ##############################################
+      # 3. Move release → live folder (keeps .env safe)
+      ##############################################
+      - name: Activate new release
         uses: appleboy/ssh-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -50,7 +58,25 @@ jobs:
           key: ${{ secrets.EC2_KEY }}
           script: |
             cd ${{ secrets.APP_DIR }}
+
+            # KEEP .env SAFE
+            if [ -f ".env" ]; then
+              echo ".env exists — keeping it safe!"
+            fi
+
+            # Remove old backend (but keep .env)
+            find . -mindepth 1 ! -name '.env' -exec rm -rf {} +
+
+            # Move new release to root folder
+            mv release/* .
+            rm -rf release
+
+            # Install dependencies
             npm install --production
+
+            # Restart PM2
             pm2 stop backend || true
             pm2 start server.js --name backend
             pm2 save
+
+            echo "🚀 Deployment completed!"
