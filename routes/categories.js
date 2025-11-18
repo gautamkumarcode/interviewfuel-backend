@@ -32,14 +32,6 @@ CategoriesRouter.post(
 			.trim()
 			.isLength({ max: 500 })
 			.withMessage("Description cannot exceed 500 characters"),
-		body("color")
-			.optional()
-			.matches(/^#[0-9A-F]{6}$/i)
-			.withMessage("Color must be a valid hex color"),
-		body("parentCategory")
-			.optional()
-			.isMongoId()
-			.withMessage("Invalid parent category ID"),
 	],
 	createCategory
 );
@@ -59,14 +51,6 @@ CategoriesRouter.put(
 			.trim()
 			.isLength({ max: 500 })
 			.withMessage("Description cannot exceed 500 characters"),
-		body("color")
-			.optional()
-			.matches(/^#[0-9A-F]{6}$/i)
-			.withMessage("Color must be a valid hex color"),
-		body("parentCategory")
-			.optional()
-			.isMongoId()
-			.withMessage("Invalid parent category ID"),
 	],
 	updateCategory
 );
