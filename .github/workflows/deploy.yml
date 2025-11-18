@@ -10,30 +10,42 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Install Dependencies
+      - name: Install dependencies
         run: npm install
 
-      - name: Upload files to EC2 (without deleting .env)
+      - name: Prepare EC2 directory (KEEP .env)
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_KEY }}
+          script: |
+            cd ${{ secrets.APP_DIR }}
+            find . -mindepth 1 ! -name ".env" ! -name ".env.local" -exec rm -rf {} +
+
+      - name: Upload project (exclude .git)
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_KEY }}
-          source: "."
+          source: "./*"
           target: "${{ secrets.APP_DIR }}"
           overwrite: true
-          rm: false     # 🚫 DO NOT delete server folder
-          strip_components: 0
+          ignores: |
+            .git/
+            node_modules/
+            .next/
 
-      - name: Restart Backend
+      - name: Start backend with PM2
         uses: appleboy/ssh-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
