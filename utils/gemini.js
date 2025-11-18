@@ -118,12 +118,12 @@ export const generateQuestions = async ({
 
 	const model = genAI.getGenerativeModel({
 		model: "gemini-2.5-flash", // Try the latest stable model
-		generationConfig: {
-			temperature: 0.8,
-			topK: 40,
-			topP: 0.95,
-			maxOutputTokens: 1500, // Reduced for faster generation
-		},
+			generationConfig: {
+				temperature: 0.3,
+				topK: 40,
+				topP: 0.95,
+				maxOutputTokens: 2048,
+			},
 	});
 
 	const prompt = generateQuestionsPrompt(
@@ -221,11 +221,9 @@ export const generateQuestions = async ({
 
 export const evaluateAnswer = async (qaList) => {
 	try {
-		console.log(`Starting AI evaluation for ${qaList.length} answers...`);
 
 		// Check if API key exists
 		if (!process.env.GEMINI_API_KEY) {
-			console.error("GEMINI_API_KEY is not set in environment variables");
 			return null;
 		}
 
@@ -240,7 +238,6 @@ export const evaluateAnswer = async (qaList) => {
 		});
 
 		const prompt = validateAnswerPrompt(qaList);
-		console.log("Generated evaluation prompt, sending to AI...");
 
 		// Add timeout for AI evaluation
 		const timeoutPromise = new Promise(
@@ -252,7 +249,6 @@ export const evaluateAnswer = async (qaList) => {
 		const result = await Promise.race([generationPromise, timeoutPromise]);
 
 		const text = result.response.text();
-		console.log("Received AI response, parsing...");
 
 		// Clean possible markdown code block formatting
 		const cleanText = text.replace(/```json|```/g, "").trim();
@@ -278,7 +274,6 @@ export const evaluateAnswer = async (qaList) => {
 				const possible = cleanText.substring(firstArrayIdx, lastArrayIdx + 1);
 				try {
 					parsed = JSON.parse(possible);
-					console.log("Recovered JSON by extracting array substring.");
 				} catch (err2) {
 					console.warn("Parsing extracted array failed:", err2.message);
 				}
@@ -329,9 +324,7 @@ export const evaluateAnswer = async (qaList) => {
 					const advanced = sanitizeJSONString(basicSanitized);
 					try {
 						parsed = JSON.parse(advanced);
-						console.log(
-							"Recovered JSON by sanitizing control characters and escaping newlines in strings."
-						);
+						
 					} catch (err3) {
 						console.warn("Sanitized parse failed:", err3.message);
 					}
@@ -359,20 +352,14 @@ export const evaluateAnswer = async (qaList) => {
 			}
 
 			if (!parsed) {
-				console.error(
-					"Failed to parse Gemini JSON response. Raw response:",
-					cleanText.slice(0, 2000)
-				);
+			
 				return null;
 			}
 		}
 
 		// Validate the response structure
 		if (!Array.isArray(parsed)) {
-			console.error(
-				"Gemini response is not an array:",
-				JSON.stringify(parsed).slice(0, 1000)
-			);
+		
 			return null;
 		}
 
@@ -387,13 +374,10 @@ export const evaluateAnswer = async (qaList) => {
 		);
 
 		if (!isValidResponse) {
-			console.error("Gemini response has invalid structure:", cleanText);
 			return null;
 		}
 
-		console.log(
-			`✅ AI evaluation completed successfully for ${parsed.length} answers`
-		);
+	
 		return parsed;
 	} catch (error) {
 		console.error("AI evaluation failed:", error);

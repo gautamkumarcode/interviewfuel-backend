@@ -20,6 +20,7 @@ import AuthRouter from "./routes/auth.js";
 import CategoriesRouter from "./routes/categories.js";
 import PracticeRouter from "./routes/practice.js";
 import QuestionsRouter from "./routes/questions.js";
+import StatsRouter from "./routes/stats.js";
 import UserRouter from "./routes/users.js";
 
 dotenv.config();
@@ -91,6 +92,7 @@ app.use("/api/practice", PracticeRouter);
 app.use("/api/achievements", AchievementRouter);
 app.use("/api/users", UserRouter);
 app.use("/api/analytics", AnalyticsRouter);
+app.use("/api/stats", StatsRouter);
 
 // Fallback route for undefined routes
 

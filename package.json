@@ -9,6 +9,7 @@
 		"dev": "nodemon server.js",
 		"test": "jest",
 		"seed": "node scripts/seedDatabase.js",
+		"seed:admin": "node scripts/seedAdmin.js",
 		"check-env": "node check-env.js",
 		"test-practice": "node test-practice-flow.js"
 	},
