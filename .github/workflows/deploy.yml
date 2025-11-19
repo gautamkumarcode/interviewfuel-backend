@@ -2,8 +2,7 @@ name: 🚀 Deploy Backend to AWS EC2
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
 
 jobs:
   deploy:
@@ -11,45 +10,50 @@ jobs:
 
     steps:
       - name: Checkout code
-      uses: actions/checkout@v4
+        uses: actions/checkout@v4
 
-      - name: Remove files we never want to upload
-        run: |
-          rm -rf node_modules
-          rm -rf .git
-          rm -rf .github
-          rm -rf tests
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
-      - name: Prepare EC2 directory (keep .env)
+      - name: Install dependencies
+        run: npm install
+
+      # ✨ 1. CLEAN SERVER BUT KEEP .env SAFE
+      - name: Clean backend folder on EC2 (keep .env)
         uses: appleboy/ssh-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_KEY }}
           script: |
-            cd ${{ secrets.APP_DIR }}
+            cd ${{ secrets.BACKEND_DIR }}
             find . -mindepth 1 ! -name ".env" -exec rm -rf {} +
 
-      - name: Upload backend files (only clean source)
+      # ✨ 2. COPY CODE FROM GITHUB → EC2
+      - name: Upload backend to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_KEY }}
-          source: "."
-          target: "${{ secrets.APP_DIR }}"
+          source: "./"
+          target: "${{ secrets.BACKEND_DIR }}"
           overwrite: true
           rm: false
 
-      - name: Install + Restart Backend
+      # ✨ 3. INSTALL & RESTART BACKEND SAFELY
+      - name: Start backend using PM2
         uses: appleboy/ssh-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_KEY }}
           script: |
-            cd ${{ secrets.APP_DIR }}
+            cd ${{ secrets.BACKEND_DIR }}
             npm install --production
+
             pm2 stop backend || true
             pm2 start server.js --name backend
             pm2 save
