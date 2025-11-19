@@ -20,7 +20,7 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      # 📤 Upload new backend files to EC2 (DO NOT DELETE ANY FILE)
+      # 📤 Upload backend to EC2 (NO DELETE)
       - name: Upload backend to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -29,12 +29,12 @@ jobs:
           key: ${{ secrets.EC2_KEY }}
           source: "./"
           target: "${{ secrets.BACKEND_DIR }}"
-          overwrite: true       # only replace files that exist
-          rm: false             # DO NOT remove remote files
-          exclude: "node_modules"   # don't upload node_modules from GitHub
+          overwrite: true
+          rm: false
+          scp_ignore: ".scpignore"
 
-      # 🚀 Install & restart backend safely
-      - name: Start backend using PM2
+      # 🚀 Install and restart backend
+      - name: Restart backend using PM2
         uses: appleboy/ssh-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -42,9 +42,7 @@ jobs:
           key: ${{ secrets.EC2_KEY }}
           script: |
             cd ${{ secrets.BACKEND_DIR }}
-
             npm install --production
-
             pm2 stop backend || true
             pm2 start server.js --name backend
             pm2 save
