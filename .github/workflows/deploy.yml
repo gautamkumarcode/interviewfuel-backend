@@ -20,8 +20,8 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      # ✨ 1. CLEAN SERVER BUT KEEP .env SAFE
-      - name: Clean backend folder on EC2 (keep .env)
+      # 🛡️ SAFELY CLEAN SERVER (keep .env, uploads, node_modules)
+      - name: Clean backend folder on EC2
         uses: appleboy/ssh-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -29,9 +29,12 @@ jobs:
           key: ${{ secrets.EC2_KEY }}
           script: |
             cd ${{ secrets.BACKEND_DIR }}
-            find . -mindepth 1 ! -name ".env" -exec rm -rf {} +
 
-      # ✨ 2. COPY CODE FROM GITHUB → EC2
+            # Remove everything EXCEPT important files
+            shopt -s extglob
+            rm -rf !(node_modules|uploads|.env)
+
+      # 📤 Upload backend code (without node_modules)
       - name: Upload backend to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -42,8 +45,9 @@ jobs:
           target: "${{ secrets.BACKEND_DIR }}"
           overwrite: true
           rm: false
+          exclude: "node_modules"
 
-      # ✨ 3. INSTALL & RESTART BACKEND SAFELY
+      # 🚀 Install and restart backend
       - name: Start backend using PM2
         uses: appleboy/ssh-action@v0.1.7
         with:
@@ -52,6 +56,7 @@ jobs:
           key: ${{ secrets.EC2_KEY }}
           script: |
             cd ${{ secrets.BACKEND_DIR }}
+
             npm install --production
 
             pm2 stop backend || true
