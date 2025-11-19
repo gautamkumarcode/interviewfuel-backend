@@ -20,21 +20,30 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      # 📤 Upload backend to EC2 (NO DELETE)
-      - name: Upload backend to EC2
+      # 🧩 TAR your code (IGNORE node_modules, .git, uploads, logs)
+      - name: Prepare deployment bundle
+        run: |
+          tar --exclude='./node_modules' \
+              --exclude='./uploads' \
+              --exclude='./logs' \
+              --exclude='./.git' \
+              --exclude='./.gitignore' \
+              -czf deploy.tar.gz .
+
+      # 📤 Upload TAR to EC2
+      - name: Upload bundle to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_KEY }}
-          source: "./"
+          source: "deploy.tar.gz"
           target: "${{ secrets.BACKEND_DIR }}"
           overwrite: true
           rm: false
-          tar_ignore: ".scpignore"     # ✔ correct field
 
-      # 🚀 Install and restart backend
-      - name: Restart backend using PM2
+      # 🚀 Extract & restart backend
+      - name: Deploy & restart backend
         uses: appleboy/ssh-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -42,7 +51,14 @@ jobs:
           key: ${{ secrets.EC2_KEY }}
           script: |
             cd ${{ secrets.BACKEND_DIR }}
+            
+            # Extract bundle
+            tar -xzf deploy.tar.gz
+
+            # Install dependencies
             npm install --production
+
+            # Restart backend
             pm2 stop backend || true
             pm2 start server.js --name backend
             pm2 save
