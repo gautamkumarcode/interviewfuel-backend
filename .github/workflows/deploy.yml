@@ -11,18 +11,16 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+      uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
+      - name: Remove files we never want to upload
+        run: |
+          rm -rf node_modules
+          rm -rf .git
+          rm -rf .github
+          rm -rf tests
 
-      - name: Install dependencies
-        run: npm install
-
-      # 🧹 Clean EC2 except env files
-      - name: Prepare EC2 for clean deploy
+      - name: Prepare EC2 directory (keep .env)
         uses: appleboy/ssh-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -30,22 +28,20 @@ jobs:
           key: ${{ secrets.EC2_KEY }}
           script: |
             cd ${{ secrets.APP_DIR }}
-            find . -mindepth 1 ! -name ".env" ! -name ".env.local" -exec rm -rf {} +
+            find . -mindepth 1 ! -name ".env" -exec rm -rf {} +
 
-      # 📦 Upload fresh code (WITHOUT .git & node_modules)
-      - name: Upload files to EC2
+      - name: Upload backend files (only clean source)
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_KEY }}
-          source: "./"
+          source: "."
           target: "${{ secrets.APP_DIR }}"
           overwrite: true
-          excludes: ".git/,node_modules/"
+          rm: false
 
-      # 🚀 Start backend
-      - name: Start backend
+      - name: Install + Restart Backend
         uses: appleboy/ssh-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
