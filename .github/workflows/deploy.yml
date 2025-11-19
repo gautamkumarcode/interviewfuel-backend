@@ -21,7 +21,8 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Cleanup old build but keep env
+      # 🧹 Clean EC2 except env files
+      - name: Prepare EC2 for clean deploy
         uses: appleboy/ssh-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -29,30 +30,22 @@ jobs:
           key: ${{ secrets.EC2_KEY }}
           script: |
             cd ${{ secrets.APP_DIR }}
+            find . -mindepth 1 ! -name ".env" ! -name ".env.local" -exec rm -rf {} +
 
-            # Keep env safe
-            mv .env /tmp/env_backup 2>/dev/null || true
-            mv .env.local /tmp/envlocal_backup 2>/dev/null || true
-
-            # Clean everything
-            sudo rm -rf ./*
-
-            # Restore env
-            mv /tmp/env_backup .env 2>/dev/null || true
-            mv /tmp/envlocal_backup .env.local 2>/dev/null || true
-
-      - name: Upload backend code
+      # 📦 Upload fresh code (WITHOUT .git & node_modules)
+      - name: Upload files to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_KEY }}
-          source: "."
+          source: "./"
           target: "${{ secrets.APP_DIR }}"
           overwrite: true
-          rm: false
+          excludes: ".git/,node_modules/"
 
-      - name: Restart Backend
+      # 🚀 Start backend
+      - name: Start backend
         uses: appleboy/ssh-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -60,8 +53,7 @@ jobs:
           key: ${{ secrets.EC2_KEY }}
           script: |
             cd ${{ secrets.APP_DIR }}
-
-            npm install
+            npm install --production
             pm2 stop backend || true
             pm2 start server.js --name backend
             pm2 save
