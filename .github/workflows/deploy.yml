@@ -31,7 +31,7 @@ jobs:
           target: "${{ secrets.BACKEND_DIR }}"
           overwrite: true
           rm: false
-          scp_ignore: ".scpignore"
+          tar_ignore: ".scpignore"     # ✔ correct field
 
       # 🚀 Install and restart backend
       - name: Restart backend using PM2
