@@ -268,25 +268,53 @@ export const createMultipleQuestions = async (req, res) => {
 // Get Single Question
 export const getSingleQuestion = async (req, res) => {
 	try {
-		const { id: slug } = req.params;
+		const { id } = req.params;
 
-		const question = await Question.findOne({
-			slug: slug,
-			status: "published", // ⬅ filter directly in the query
-		})
-			.populate("category", "name slug color")
-			.populate("author", "name username avatar")
-			.populate("relatedQuestions", "title difficulty category")
-			.populate("contributors.user", "name username");
+		// Try to find by ObjectId first, then by slug
+		let question;
+
+		// Check if the id is a valid MongoDB ObjectId (24 character hex string)
+		const isObjectId = /^[0-9a-fA-F]{24}$/.test(id);
+
+		if (isObjectId) {
+			// Find by ObjectId
+			question = await Question.findById(id)
+				.populate("category", "name slug color")
+				.populate("author", "name username avatar")
+				.populate("relatedQuestions", "title difficulty category")
+				.populate("contributors.user", "name username");
+		} else {
+			// Find by slug
+			question = await Question.findOne({ slug: id })
+				.populate("category", "name slug color")
+				.populate("author", "name username avatar")
+				.populate("relatedQuestions", "title difficulty category")
+				.populate("contributors.user", "name username");
+		}
 
 		if (!question) {
 			return res.status(404).json({
 				success: false,
-				message: "Question not found or not published",
+				message: "Question not found",
 			});
 		}
 
-		await question.incrementViews();
+		// Check if question is published OR user is author/admin
+		const isPublished = question.status === "published";
+		const isAuthor = req.user && question.author._id.toString() === req.user.id;
+		const isAdmin = req.user && req.user.role === "admin";
+
+		if (!isPublished && !isAuthor && !isAdmin) {
+			return res.status(403).json({
+				success: false,
+				message: "This question is not published yet",
+			});
+		}
+
+		// Only increment views for published questions
+		if (isPublished) {
+			await question.incrementViews();
+		}
 
 		res.json({ success: true, data: question });
 	} catch (err) {
@@ -323,7 +351,14 @@ export const updateQuestion = async (req, res) => {
 				.json({ success: false, message: "Not authorized" });
 		}
 
-		Object.assign(question, req.body);
+		// Create a copy of req.body and remove fields that shouldn't be updated
+		const updateData = { ...req.body };
+		delete updateData.author; // Don't allow changing author
+		delete updateData.slug; // Don't allow changing slug
+		delete updateData.createdAt; // Don't allow changing creation date
+		delete updateData._id; // Don't allow changing ID
+
+		Object.assign(question, updateData);
 		if (req.body.tags)
 			question.tags = req.body.tags.map((tag) => tag.trim().toLowerCase());
 

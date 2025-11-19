@@ -74,6 +74,8 @@ const questionSchema = new mongoose.Schema(
 		timeLimit: {
 			type: Number,
 			default: 30,
+			min: [1, "Time limit must be at least 1 minute"],
+			max: [180, "Time limit cannot exceed 180 minutes"],
 		},
 		stats: {
 			views: { type: Number, default: 0 },
