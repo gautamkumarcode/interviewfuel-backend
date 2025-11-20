@@ -1,11 +1,26 @@
 // utils/gemini.js
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 import {
 	generateQuestionsPrompt,
 	validateAnswerPrompt,
 } from "./genetateQuestionsPrompts.js";
-dotenv.config();
+
+// Get the directory name of the current module
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load .env from backend directory (for local development)
+// In production (AWS/Vercel), environment variables are set directly
+dotenv.config({ path: path.join(__dirname, "../.env") });
+
+// Validate API key on module load
+if (!process.env.GEMINI_API_KEY) {
+	console.warn("⚠️ WARNING: GEMINI_API_KEY not found in environment variables");
+	console.warn("AI question generation will not work without a valid API key");
+}
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
@@ -45,6 +60,7 @@ const generateQuestionBatch = async (
 		calculatedTimePerQuestion,
 		isCustomTopic
 	);
+
 	const result = await model.generateContent(prompt);
 	const text = result.response.text();
 	const cleanText = text.replace(/```json|```/g, "").trim();
@@ -59,39 +75,6 @@ const generateQuestionBatch = async (
 		content: typeof q.content === "object" ? q.content.text : q.content,
 		timeLimit: q.timeLimit || 120,
 	}));
-};
-
-// Fallback questions for when AI generation fails
-const generateFallbackQuestions = (topic, difficulty, count) => {
-	const fallbackQuestions = [
-		{
-			title: `What are the key concepts in ${topic}?`,
-			content: `Explain the fundamental concepts and principles of ${topic}. Discuss the main components and how they work together.`,
-			timeLimit: 180,
-		},
-		{
-			title: `How would you implement a solution in ${topic}?`,
-			content: `Describe your approach to implementing a typical solution using ${topic}. Include best practices and considerations.`,
-			timeLimit: 240,
-		},
-		{
-			title: `What are common challenges in ${topic}?`,
-			content: `Discuss common problems developers face when working with ${topic} and how to overcome them.`,
-			timeLimit: 200,
-		},
-		{
-			title: `Compare different approaches in ${topic}`,
-			content: `Compare and contrast different methodologies or tools available in ${topic}. When would you use each?`,
-			timeLimit: 220,
-		},
-		{
-			title: `Optimize performance in ${topic}`,
-			content: `How would you optimize performance and efficiency when working with ${topic}? Provide specific techniques.`,
-			timeLimit: 260,
-		},
-	];
-
-	return fallbackQuestions.slice(0, count);
 };
 
 export const generateQuestions = async ({
@@ -112,18 +95,17 @@ export const generateQuestions = async ({
 	const cached = questionCache.get(cacheKey);
 
 	if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-		console.log(`Cache hit for ${cacheKey}`);
 		return cached.questions;
 	}
 
 	const model = genAI.getGenerativeModel({
 		model: "gemini-2.5-flash", // Try the latest stable model
-			generationConfig: {
-				temperature: 0.3,
-				topK: 40,
-				topP: 0.95,
-				maxOutputTokens: 2048,
-			},
+		generationConfig: {
+			temperature: 0.3,
+			topK: 40,
+			topP: 0.95,
+			maxOutputTokens: 2048,
+		},
 	});
 
 	const prompt = generateQuestionsPrompt(
@@ -136,6 +118,11 @@ export const generateQuestions = async ({
 	);
 
 	try {
+		// Check if API key is configured
+		if (!process.env.GEMINI_API_KEY) {
+			throw new Error("AI service not configured - GEMINI_API_KEY missing");
+		}
+
 		// For larger question counts, generate in smaller batches for better performance
 		if (count > 8) {
 			const batchSize = Math.ceil(count / 2);
@@ -174,19 +161,18 @@ export const generateQuestions = async ({
 		}
 
 		// Set timeout for AI generation
-		const timeoutPromise = new Promise(
-			(_, reject) =>
-				setTimeout(() => reject(new Error("AI generation timeout")), 15000) // 15 second timeout
+		const timeoutPromise = new Promise((_, reject) =>
+			setTimeout(
+				() => reject(new Error("AI generation timeout after 30s")),
+				30000
+			)
 		);
 
 		const generationPromise = model.generateContent(prompt);
 		const result = await Promise.race([generationPromise, timeoutPromise]);
 
 		const text = result.response.text();
-
-		// Clean possible markdown code block formatting
 		const cleanText = text.replace(/```json|```/g, "").trim();
-
 		const questions = JSON.parse(cleanText);
 
 		if (!Array.isArray(questions)) {
@@ -196,7 +182,7 @@ export const generateQuestions = async ({
 		const processedQuestions = questions.map((q) => ({
 			title: typeof q.title === "object" ? q.title.text : q.title,
 			content: typeof q.content === "object" ? q.content.text : q.content,
-			timeLimit: q.timeLimit || 120, // Default fallback
+			timeLimit: q.timeLimit || 120,
 		}));
 
 		// Cache the result
@@ -207,21 +193,13 @@ export const generateQuestions = async ({
 
 		return processedQuestions;
 	} catch (error) {
-		console.error("Error generating questions:", error);
-
-		// Fallback to default questions if AI fails
-		return generateFallbackQuestions(
-			topic,
-			difficulty,
-			count,
-			calculatedTimePerQuestion
-		);
+		console.error("AI question generation failed:", error.message);
+		throw new Error(`AI question generation failed: ${error.message}`);
 	}
 };
 
 export const evaluateAnswer = async (qaList) => {
 	try {
-
 		// Check if API key exists
 		if (!process.env.GEMINI_API_KEY) {
 			return null;
@@ -253,17 +231,12 @@ export const evaluateAnswer = async (qaList) => {
 		// Clean possible markdown code block formatting
 		const cleanText = text.replace(/```json|```/g, "").trim();
 
-		// Try to parse the JSON returned from Gemini with robust recovery.
+		// Try to parse the JSON returned from Gemini with robust recovery
 		let parsed = null;
 		try {
 			parsed = JSON.parse(cleanText);
 		} catch (err) {
-			console.warn(
-				"Initial JSON.parse failed, attempting recovery:",
-				err.message
-			);
-
-			// Attempt 1: extract first JSON array/object substring (likely the intended payload)
+			// Attempt 1: extract first JSON array substring
 			const firstArrayIdx = cleanText.indexOf("[");
 			const lastArrayIdx = cleanText.lastIndexOf("]");
 			if (
@@ -275,20 +248,18 @@ export const evaluateAnswer = async (qaList) => {
 				try {
 					parsed = JSON.parse(possible);
 				} catch (err2) {
-					console.warn("Parsing extracted array failed:", err2.message);
+					// Ignore and try next method
 				}
 			}
 
-			// Attempt 2: sanitize control characters (keep common whitespace \n, \r, \t)
+			// Attempt 2: sanitize control characters
 			if (!parsed) {
-				// Advanced sanitizer: escape literal newlines/tabs inside quoted strings
 				const sanitizeJSONString = (input) => {
 					let result = "";
 					let inString = false;
 					for (let i = 0; i < input.length; i++) {
 						const ch = input[i];
 						if (ch === '"') {
-							// Count backslashes immediately before this quote to decide if escaped
 							let k = i - 1;
 							let backslashes = 0;
 							while (k >= 0 && input[k] === "\\") {
@@ -315,25 +286,22 @@ export const evaluateAnswer = async (qaList) => {
 				};
 
 				try {
-					// First sanitize out disallowed control chars outside strings
 					const basicSanitized = cleanText.replace(
 						/[\u0000-\u0008\u000B\u000C\u000E-\u001F]+/g,
 						" "
 					);
-					// Then escape newlines inside quoted strings
 					const advanced = sanitizeJSONString(basicSanitized);
 					try {
 						parsed = JSON.parse(advanced);
-						
 					} catch (err3) {
-						console.warn("Sanitized parse failed:", err3.message);
+						// Ignore
 					}
 				} catch (sanErr) {
-					console.warn("Sanitization helper failed:", sanErr.message || sanErr);
+					// Ignore
 				}
 			}
 
-			// Attempt 3: as a last resort, try to find a {...} object list
+			// Attempt 3: try to find object list
 			if (!parsed) {
 				const firstObj = cleanText.indexOf("{");
 				const lastObj = cleanText.lastIndexOf("}");
@@ -343,23 +311,18 @@ export const evaluateAnswer = async (qaList) => {
 						const maybe = JSON.parse("[" + possibleObj + "]");
 						if (Array.isArray(maybe)) parsed = maybe;
 					} catch (err4) {
-						console.warn(
-							"Attempt to parse object substring failed:",
-							err4.message
-						);
+						// Ignore
 					}
 				}
 			}
 
 			if (!parsed) {
-			
 				return null;
 			}
 		}
 
 		// Validate the response structure
 		if (!Array.isArray(parsed)) {
-		
 			return null;
 		}
 
@@ -377,15 +340,9 @@ export const evaluateAnswer = async (qaList) => {
 			return null;
 		}
 
-	
 		return parsed;
 	} catch (error) {
-		console.error("AI evaluation failed:", error);
-		console.error("Error details:", {
-			message: error.message,
-			stack: error.stack,
-			qaListLength: qaList?.length,
-		});
+		console.error("AI evaluation failed:", error.message);
 		return null;
 	}
 };

@@ -64,9 +64,6 @@ export const createPracticeSession = async (req, res) => {
 					isCustomTopic: topicSource === "custom",
 				});
 
-				const generationTime = Date.now() - startTime;
-				console.log(`AI questions generated in ${generationTime}ms`);
-
 				// Ensure time limits add up to total session duration
 				const totalSessionSeconds = totalSessionMinutes * 60;
 				let totalQuestionTime = 0;
@@ -273,7 +270,6 @@ export const submitAnswer = async (req, res) => {
 		for (const { questionIndex, answer, timeSpent } of answers) {
 			const sessionQuestion = session.questions[questionIndex];
 			if (!sessionQuestion) {
-				console.warn(`Invalid question index: ${questionIndex}`);
 				continue;
 			}
 
@@ -288,7 +284,6 @@ export const submitAnswer = async (req, res) => {
 			} else {
 				questionData = sessionQuestion.question;
 				if (!questionData) {
-					console.warn(`Question not found for index: ${questionIndex}`);
 					continue;
 				}
 			}
@@ -314,19 +309,10 @@ export const submitAnswer = async (req, res) => {
 		let aiResults = null;
 		try {
 			if (qaList.length > 0) {
-				console.log(`Attempting AI evaluation for ${qaList.length} answers...`);
 				aiResults = await evaluateAnswer(qaList);
-
-				if (aiResults) {
-					console.log(
-						`✅ AI evaluation successful: ${aiResults.length} results`
-					);
-				} else {
-					console.warn("⚠️ AI evaluation returned null, using fallback");
-				}
 			}
 		} catch (error) {
-			console.error("❌ AI evaluation error:", error);
+			console.error("AI evaluation error:", error.message);
 		}
 
 		// Create fallback results if AI evaluation failed
@@ -335,9 +321,6 @@ export const submitAnswer = async (req, res) => {
 			!Array.isArray(aiResults) ||
 			aiResults.length !== qaList.length
 		) {
-			console.warn(
-				"AI evaluation failed or returned invalid results, using fallback"
-			);
 			aiResults = qaList.map((qa, index) => ({
 				question: qa.question,
 				userAnswer: qa.userAnswer,
@@ -396,13 +379,8 @@ export const submitAnswer = async (req, res) => {
 				}
 
 				await Attempt.create(attemptData);
-				console.log(
-					`✅ Attempt created for ${
-						sessionQuestion.aiGenerated ? "AI" : "database"
-					} question at index ${questionIndex}`
-				);
 			} catch (attemptError) {
-				console.error("Failed to create attempt:", attemptError);
+				console.error("Failed to create attempt:", attemptError.message);
 				// Continue processing other answers even if one attempt fails
 			}
 		}
@@ -578,7 +556,7 @@ export const completeSession = async (req, res) => {
 				await user.save();
 			}
 		} catch (userUpdateError) {
-			console.error("Failed to update user stats:", userUpdateError);
+			console.error("Failed to update user stats:", userUpdateError.message);
 			// Don't fail the session completion if user stats update fails
 		}
 
