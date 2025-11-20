@@ -49,7 +49,7 @@ jobs:
 
             # Create/update .env file with GitHub secrets
             cat > .env << 'EOF'
-            MONGO_URI=${{ secrets.MONGO_URI }}
+            MONGODB_URI=${{ secrets.MONGODB_URI }}
             JWT_SECRET=${{ secrets.JWT_SECRET }}
             JWT_EXPIRE=7d
             GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
