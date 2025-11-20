@@ -1,4 +1,6 @@
 import { validationResult } from "express-validator";
+import { ERROR_MESSAGES } from "../const/error-message.js";
+import { SUCCESS_MESSAGE } from "../const/succes-message.js";
 import User from "../models/User.js";
 import {
 	generateAccessToken,
@@ -54,7 +56,7 @@ export const register = async (req, res) => {
 		if (!errors.isEmpty()) {
 			return res.status(400).json({
 				success: false,
-				message: "Validation failed",
+				message: ERROR_MESSAGES.VALIDATION_FAILED,
 				errors: errors.array(),
 			});
 		}
@@ -70,20 +72,20 @@ export const register = async (req, res) => {
 				success: false,
 				message:
 					existingUser.email === email
-						? "Email already registered"
-						: "Username already taken",
+						? ERROR_MESSAGES.EMAIL_ALREADY_EXISTS
+						: ERROR_MESSAGES.USERNAME_ALREADY_EXISTS,
 			});
 		}
 
 		const user = new User({ name, email, username, password, role: userRole });
 		await user.save();
 
-		sendTokens(res, user, "User registered successfully", 201);
+		sendTokens(res, user, SUCCESS_MESSAGE.USER_REGISTERED, 201);
 	} catch (error) {
 		console.error("Registration error:", error);
 		res
 			.status(500)
-			.json({ success: false, message: "Server error during registration" });
+			.json({ success: false, message: ERROR_MESSAGES.SERVER_ERROR });
 	}
 };
 
@@ -94,7 +96,7 @@ export const login = async (req, res) => {
 		if (!errors.isEmpty()) {
 			return res.status(400).json({
 				success: false,
-				message: "Validation failed",
+				message: ERROR_MESSAGES.VALIDATION_FAILED,
 				errors: errors.array(),
 			});
 		}
@@ -108,16 +110,16 @@ export const login = async (req, res) => {
 		if (!user || !(await user.comparePassword(password))) {
 			return res
 				.status(401)
-				.json({ success: false, message: "Invalid credentials" });
+				.json({ success: false, message: ERROR_MESSAGES.INVALID_CREDENTIALS });
 		}
 
 		await user.updateLastActive();
-		sendTokens(res, user, "Login successful", 200, true);
+		sendTokens(res, user, SUCCESS_MESSAGE.USER_LOGGED_IN, 200, true);
 	} catch (error) {
 		console.error("Login error:", error);
 		res
 			.status(500)
-			.json({ success: false, message: "Server error during login" });
+			.json({ success: false, message: ERROR_MESSAGES.SERVER_ERROR });
 	}
 };
 
@@ -127,7 +129,7 @@ export const logout = (req, res) => {
 		.clearCookie("token")
 		.clearCookie("refreshToken")
 		.status(200)
-		.json({ success: true, message: "Logout successful" });
+		.json({ success: true, message: SUCCESS_MESSAGE.USER_LOGGED_OUT });
 };
 
 // GET PROFILE
@@ -143,7 +145,9 @@ export const getMe = async (req, res) => {
 		});
 	} catch (error) {
 		console.error("Get user error:", error);
-		res.status(500).json({ success: false, message: "Server error" });
+		res
+			.status(500)
+			.json({ success: false, message: ERROR_MESSAGES.SERVER_ERROR });
 	}
 };
 
@@ -165,7 +169,7 @@ export const changePassword = async (req, res) => {
 		if (!user || !(await user.comparePassword(currentPassword))) {
 			return res.status(400).json({
 				success: false,
-				message: "Current password is incorrect",
+				message: ERROR_MESSAGES.PASSWORD_MISMATCH,
 			});
 		}
 
@@ -174,10 +178,10 @@ export const changePassword = async (req, res) => {
 
 		res.json({
 			success: true,
-			message: "Password changed successfully",
+			message: SUCCESS_MESSAGE.USER_PASSWORD_CHANGED,
 		});
 	} catch (error) {
 		console.error("Change password error:", error);
-		res.status(500).json({ success: false, message: "Server error" });
+		res.status(500).json({ success: false, message: ERROR_MESSAGES.SERVER_ERROR });
 	}
 };

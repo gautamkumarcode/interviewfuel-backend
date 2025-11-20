@@ -1,4 +1,6 @@
 import { validationResult } from "express-validator";
+import { ERROR_MESSAGES } from "../const/error-message.js";
+import { SUCCESS_MESSAGE } from "../const/succes-message.js";
 import User from "../models/User.js";
 
 // @desc    Get current user's profile
@@ -19,7 +21,7 @@ export const getProfile = async (req, res) => {
 		console.error("Get profile error:", error);
 		res.status(500).json({
 			success: false,
-			message: "Server error",
+			message: ERROR_MESSAGES.SERVER_ERROR,
 		});
 	}
 };
@@ -33,7 +35,7 @@ export const updateProfile = async (req, res) => {
 		if (!errors.isEmpty()) {
 			return res.status(400).json({
 				success: false,
-				message: "Validation failed",
+				message: ERROR_MESSAGES.VALIDATION_FAILED,
 				errors: errors.array(),
 			});
 		}
@@ -62,14 +64,14 @@ export const updateProfile = async (req, res) => {
 
 		res.json({
 			success: true,
-			message: "Profile updated successfully",
+			message: SUCCESS_MESSAGE.USER_UPDATED,
 			data: { user },
 		});
 	} catch (error) {
 		console.error("Update profile error:", error);
 		res.status(500).json({
 			success: false,
-			message: "Server error",
+			message: ERROR_MESSAGES.SERVER_ERROR,
 		});
 	}
 };
