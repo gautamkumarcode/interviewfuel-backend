@@ -55,7 +55,7 @@ jobs:
             GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
             FRONTEND_URL=${{ secrets.FRONTEND_URL }}
             NODE_ENV=production
-            PORT=5000
+            PORT=4500
             EOF
 
             npm install --production
