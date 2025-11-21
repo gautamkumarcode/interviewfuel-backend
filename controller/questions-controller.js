@@ -891,7 +891,7 @@ const getRelatedQuestionsForQuestion = async (question, limit = 5) => {
 			status: "published",
 		})
 			.populate("category", "name slug color")
-			.populate("author", "name username")
+			.populate("author", "name username avatar")
 			.select("title difficulty category stats tags slug createdAt")
 			.sort({ "stats.views": -1, createdAt: -1 })
 			.limit(limit - relatedQuestions.length);
@@ -903,20 +903,44 @@ const getRelatedQuestionsForQuestion = async (question, limit = 5) => {
 };
 
 export const getMyQuestions = async (req, res) => {
+	const { page = 1, pageSize = 10 } = req.query;
+
 	try {
 		const userId = req.user._id;
+
+		const parsedPage = parseInt(page, 10) || 1;
+		const parsedPageSize = parseInt(pageSize, 10) || 20;
+
+		const current = parsedPage;
+		const limit = parsedPageSize;
+		const skip = (current - 1) * limit;
+
+		// total must be computed before calculating pages
+		const total = await Question.countDocuments({ author: userId });
+		const pages = Math.max(1, Math.ceil(total / limit));
+		const hasNextPage = current < pages;
+		const hasPrevPage = current > 1;
+
 		const questions = await Question.find({ author: userId })
 			.populate("category", "name slug color")
+			.populate("author", "name username avatar")
 			.select(
-				"id category stats title tags difficulty timeLimit slug createdAt updatedAt status"
+				"id category stats title tags difficulty timeLimit slug createdAt updatedAt status author"
 			)
-			.sort({ createdAt: -1 });
+			.sort({ createdAt: -1 })
+			.skip(skip)
+			.limit(limit);
+
 		res.json({
 			success: true,
 			data: {
 				results: questions,
 				pagination: {
-					total: questions.length,
+					current,
+					total,
+					limit,
+					hasNext: hasNextPage,
+					hasPrev: hasPrevPage,
 				},
 			},
 		});
@@ -927,20 +951,41 @@ export const getMyQuestions = async (req, res) => {
 };
 
 export const getBookmarkedQuestions = async (req, res) => {
+	const { page = 1, pageSize = 10 } = req.query;
 	try {
 		const userId = req.user._id;
+		const parsedPage = parseInt(page, 10) || 1;
+		const parsedPageSize = parseInt(pageSize, 10) || 20;
+		const current = parsedPage;
+		const limit = parsedPageSize;
+		const skip = (current - 1) * limit;
+
+		// total must be computed before calculating pages
+		const total = await Question.countDocuments({ bookmarkedBy: userId });
+		const pages = Math.max(1, Math.ceil(total / limit));
+		const hasNextPage = current < pages;
+		const hasPrevPage = current > 1;
+
 		const questions = await Question.find({ bookmarkedBy: userId })
 			.populate("category", "name slug color")
+			.populate("author", "name username avatar")
 			.select(
-				"id category stats title tags difficulty timeLimit slug createdAt updatedAt"
+				"id category stats title tags difficulty timeLimit slug createdAt updatedAt author"
 			)
-			.sort({ createdAt: -1 });
-		res.json({
+			.sort({ createdAt: -1 })
+			.skip(skip)
+			.limit(limit);
+
+		return res.json({
 			success: true,
 			data: {
 				results: questions,
 				pagination: {
-					total: questions.length,
+					total,
+					current,
+					limit,
+					hasNext: hasNextPage,
+					hasPrev: hasPrevPage,
 				},
 			},
 		});
@@ -950,20 +995,32 @@ export const getBookmarkedQuestions = async (req, res) => {
 	}
 };
 export const getLikedQuestions = async (req, res) => {
+	const { page = 1, pageSize = 10 } = req.query;
 	try {
 		const userId = req.user._id;
 		const questions = await Question.find({ likedBy: userId })
 			.populate("category", "name slug color")
+			.populate("author", "name username avatar")
+
 			.select(
-				"id category stats title tags difficulty timeLimit slug createdAt updatedAt"
+				"id category stats title tags difficulty timeLimit slug createdAt updatedAt author"
 			)
-			.sort({ createdAt: -1 });
-		res.json({
+			.sort({ createdAt: -1 })
+			.skip((page - 1) * pageSize)
+			.limit(Number(pageSize));
+
+		const total = await Question.countDocuments({ likedBy: userId });
+
+		return res.json({
 			success: true,
 			data: {
 				results: questions,
 				pagination: {
-					total: questions.length,
+					total,
+					current: Number(page),
+					limit: Number(pageSize),
+					hasNext: Number(page) * Number(pageSize) < total,
+					hasPrev: Number(page) > 1,
 				},
 			},
 		});
@@ -974,19 +1031,27 @@ export const getLikedQuestions = async (req, res) => {
 };
 
 export const getAdminQuestions = async (req, res) => {
+	const { page = 1, pageSize = 10 } = req.query;
 	try {
 		const questions = await Question.find()
 			.populate("category", "name slug color")
+			.populate("author", "name username avatar")
 			.select(
-				"id category stats title tags difficulty timeLimit slug createdAt updatedAt"
+				"id category stats title tags difficulty timeLimit slug createdAt updatedAt author"
 			)
-			.sort({ createdAt: -1 });
-		res.json({
+			.sort({ createdAt: -1 })
+			.skip((page - 1) * pageSize)
+			.limit(Number(pageSize));
+		return res.json({
 			success: true,
 			data: {
 				results: questions,
 				pagination: {
 					total: questions.length,
+					current: Number(page),
+					limit: Number(pageSize),
+					hasNext: Number(page) * Number(pageSize) < questions.length,
+					hasPrev: Number(page) > 1,
 				},
 			},
 		});
