@@ -142,8 +142,10 @@ export const createQuestion = async (req, res) => {
 
 		// Set reviewStatus based on user role
 		const reviewStatus = req.user.role === "admin" ? "approved" : "pending";
-		const status =
-			req.user.role === "admin" ? req.body.status || "published" : "draft";
+		const status = req.user.role === "admin" ? "published" : "draft";
+		const reviewComment =
+			req.user.role === "admin" ? "Auto-approved by admin" : "";
+		const reviewers = req.user.role === "admin" ? [req.user.id] : [];
 
 		const question = new Question({
 			...req.body,
@@ -157,12 +159,14 @@ export const createQuestion = async (req, res) => {
 				isVerified: true,
 				verifiedBy: req.user.id,
 				verifiedAt: new Date(),
+				reviewComment,
+				reviewers,
 			}),
 		});
 
 		await question.save();
 		await question.populate("category", "name slug color");
-		await question.populate("author", "name username");
+
 		await category.updateQuestionCount();
 
 		res.status(201).json({
@@ -282,14 +286,20 @@ export const getSingleQuestion = async (req, res) => {
 				.populate("category", "name slug color")
 				.populate("author", "name username avatar")
 				.populate("relatedQuestions", "title difficulty category")
-				.populate("contributors.user", "name username");
+				.populate({
+					path: "contributors.user",
+					select: "name username avatar"
+				});
 		} else {
 			// Find by slug
 			question = await Question.findOne({ slug: id })
 				.populate("category", "name slug color")
 				.populate("author", "name username avatar")
 				.populate("relatedQuestions", "title difficulty category")
-				.populate("contributors.user", "name username");
+				.populate({
+					path: "contributors.user",
+					select: "name username avatar"
+				});
 		}
 
 		if (!question) {
@@ -363,10 +373,11 @@ export const updateQuestion = async (req, res) => {
 			question.tags = req.body.tags.map((tag) => tag.trim().toLowerCase());
 
 		await question.save();
-		await question.populate("category", "name slug color");
-		await question.populate("author", "name username");
+		await question
+			.populate("category", "name slug color")
+			.populate("author", "name username");
 
-		res.json({
+		return res.json({
 			success: true,
 			message: "Question updated",
 			data: { question },
@@ -436,7 +447,7 @@ export const likeQuestion = async (req, res) => {
 			});
 		}
 
-		res.json({
+		return res.json({
 			success: true,
 			message: "Question liked",
 			data: { likes: question.stats.likes },

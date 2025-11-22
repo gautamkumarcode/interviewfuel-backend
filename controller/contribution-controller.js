@@ -36,6 +36,31 @@ export const submitContribution = async (req, res) => {
 			status: "pending",
 		});
 
+		// Update question's contribution count and contributors list
+		// Ensure contributors array stores entries consistently and avoid duplicates
+		const contributorExists = question.contributors.some((c) =>
+			c && c.user
+				? c.user.toString() === req.user.id
+				: c.toString() === req.user.id
+		);
+
+		if (!contributorExists) {
+			const entry =
+				question.contributors.length &&
+				question.contributors[0] &&
+				question.contributors[0].user !== undefined
+					? {
+							user: req.user.id,
+							contribution: `Submitted ${type}`,
+							contributedAt: new Date(),
+					  }
+					: req.user.id;
+
+			question.contributors.push(entry);
+		}
+
+		// Bump contribution count and persist the question
+		await question.save();
 		await contribution.save();
 		await contribution.populate("contributor", "name username avatar");
 
