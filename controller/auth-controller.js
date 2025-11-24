@@ -185,3 +185,244 @@ export const changePassword = async (req, res) => {
 		res.status(500).json({ success: false, message: ERROR_MESSAGES.SERVER_ERROR });
 	}
 };
+
+// UPDATE PROFILE
+export const updateProfile = async (req, res) => {
+	try {
+		const { name, userName, bio, location, website, social } = req.body;
+		const userId = req.user.id;
+
+		// Check if username is being changed and if it's already taken
+		if (userName) {
+			const existingUser = await User.findOne({
+				userName,
+				_id: { $ne: userId },
+			});
+
+			if (existingUser) {
+				return res.status(400).json({
+					success: false,
+					message: "Username is already taken",
+				});
+			}
+		}
+
+		const updateData = {};
+		if (name !== undefined) updateData.name = name;
+		if (userName !== undefined) updateData.userName = userName;
+		if (bio !== undefined) updateData.bio = bio;
+		if (location !== undefined) updateData.location = location;
+		if (website !== undefined) updateData.website = website;
+		if (social !== undefined) updateData.social = social;
+
+		const user = await User.findByIdAndUpdate(userId, updateData, {
+			new: true,
+			runValidators: true,
+		}).select("-password");
+
+		res.json({
+			success: true,
+			message: "Profile updated successfully",
+			data: { user },
+		});
+	} catch (error) {
+		console.error("Update profile error:", error);
+		res.status(500).json({
+			success: false,
+			message: ERROR_MESSAGES.SERVER_ERROR,
+		});
+	}
+};
+
+// UPLOAD AVATAR
+export const uploadAvatar = async (req, res) => {
+	try {
+		if (!req.file) {
+			return res.status(400).json({
+				success: false,
+				message: "No file uploaded",
+			});
+		}
+
+		const userId = req.user.id;
+		const user = await User.findById(userId);
+
+		// Delete old avatar if exists
+		if (user.avatar) {
+			try {
+				const { deleteAvatar: deleteAvatarFromStorage } = await import(
+					"../services/storage-service.js"
+				);
+				await deleteAvatarFromStorage(user.avatar);
+			} catch (deleteError) {
+				console.error("Error deleting old avatar:", deleteError);
+				// Continue even if deletion fails
+			}
+		}
+
+		// Upload new avatar using storage service
+		const { uploadAvatar: uploadAvatarToStorage } = await import(
+			"../services/storage-service.js"
+		);
+		const avatarUrl = await uploadAvatarToStorage(req.file.buffer, userId);
+
+		// Update user avatar URL
+		user.avatar = avatarUrl;
+		await user.save();
+
+		res.json({
+			success: true,
+			message: "Avatar uploaded successfully",
+			data: { avatarUrl },
+		});
+	} catch (error) {
+		console.error("Upload avatar error:", error);
+		res.status(500).json({
+			success: false,
+			message: error.message || ERROR_MESSAGES.SERVER_ERROR,
+		});
+	}
+};
+
+// DELETE AVATAR
+export const deleteAvatar = async (req, res) => {
+	try {
+		const userId = req.user.id;
+		const user = await User.findById(userId);
+
+		// Delete from storage if exists
+		if (user.avatar) {
+			try {
+				const { deleteAvatar: deleteAvatarFromStorage } = await import(
+					"../services/storage-service.js"
+				);
+				await deleteAvatarFromStorage(user.avatar);
+			} catch (deleteError) {
+				console.error("Error deleting from storage:", deleteError);
+				// Continue even if deletion fails
+			}
+		}
+
+		// Update user avatar to null
+		await User.findByIdAndUpdate(userId, { avatar: null });
+
+		res.json({
+			success: true,
+			message: "Avatar deleted successfully",
+		});
+	} catch (error) {
+		console.error("Delete avatar error:", error);
+		res.status(500).json({
+			success: false,
+			message: ERROR_MESSAGES.SERVER_ERROR,
+		});
+	}
+};
+
+// UPDATE PREFERENCES
+export const updatePreferences = async (req, res) => {
+	try {
+		const { preferences } = req.body;
+		const userId = req.user.id;
+
+		const user = await User.findByIdAndUpdate(
+			userId,
+			{ preferences },
+			{ new: true, runValidators: true }
+		).select("-password");
+
+		res.json({
+			success: true,
+			message: "Preferences updated successfully",
+			data: { user },
+		});
+	} catch (error) {
+		console.error("Update preferences error:", error);
+		res.status(500).json({
+			success: false,
+			message: ERROR_MESSAGES.SERVER_ERROR,
+		});
+	}
+};
+
+// EXPORT USER DATA
+export const exportUserData = async (req, res) => {
+	try {
+		const userId = req.user.id;
+
+		const user = await User.findById(userId)
+			.select("-password")
+			.populate("achievements.achievementId");
+
+		const exportData = {
+			profile: {
+				name: user.name,
+				email: user.email,
+				userName: user.userName,
+				bio: user.bio,
+				location: user.location,
+				website: user.website,
+				social: user.social,
+				joinDate: user.createdAt,
+			},
+			stats: user.stats,
+			achievements: user.achievements,
+			preferences: user.preferences,
+			exportedAt: new Date().toISOString(),
+		};
+
+		res.setHeader("Content-Type", "application/json");
+		res.setHeader(
+			"Content-Disposition",
+			`attachment; filename="user-data-${user.userName}-${Date.now()}.json"`
+		);
+		res.json(exportData);
+	} catch (error) {
+		console.error("Export data error:", error);
+		res.status(500).json({
+			success: false,
+			message: ERROR_MESSAGES.SERVER_ERROR,
+		});
+	}
+};
+
+// DELETE ACCOUNT
+export const deleteAccount = async (req, res) => {
+	try {
+		const { password } = req.body;
+		const userId = req.user.id;
+
+		if (!password) {
+			return res.status(400).json({
+				success: false,
+				message: "Password is required to delete account",
+			});
+		}
+
+		const user = await User.findById(userId).select("+password");
+
+		if (!user || !(await user.comparePassword(password))) {
+			return res.status(401).json({
+				success: false,
+				message: "Invalid password",
+			});
+		}
+
+		// Soft delete - mark as inactive instead of actually deleting
+		await User.findByIdAndUpdate(userId, { isActive: false });
+
+		// Clear cookies
+		res.clearCookie("token").clearCookie("refreshToken");
+
+		res.json({
+			success: true,
+			message: "Account deleted successfully",
+		});
+	} catch (error) {
+		console.error("Delete account error:", error);
+		res.status(500).json({
+			success: false,
+			message: ERROR_MESSAGES.SERVER_ERROR,
+		});
+	}
+};

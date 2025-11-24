@@ -2,14 +2,21 @@ import express from "express";
 import { body } from "express-validator";
 import {
 	changePassword,
+	deleteAccount,
+	deleteAvatar,
+	exportUserData,
 	getMe,
 	login,
 	logout,
 	register,
+	updatePreferences,
+	updateProfile,
+	uploadAvatar,
 } from "../controller/auth-controller.js";
 import { requireRole } from "../middleware/adminAuth.js";
 import { auth } from "../middleware/auth.js";
 import { refreshTokenMiddleware } from "../middleware/refreshToken.js";
+import { upload } from "../middleware/upload.js";
 
 const AuthRouter = express.Router();
 
@@ -64,6 +71,25 @@ AuthRouter.post(
 
 // Get current user
 AuthRouter.get("/me", auth, getMe);
+
+// Update profile
+AuthRouter.put("/profile", auth, updateProfile);
+
+// Upload avatar
+AuthRouter.post("/avatar", auth, upload.single("avatar"), uploadAvatar);
+
+// Delete avatar
+AuthRouter.delete("/avatar", auth, deleteAvatar);
+
+// Update preferences
+AuthRouter.put("/preferences", auth, updatePreferences);
+
+// Export user data
+AuthRouter.get("/export-data", auth, exportUserData);
+
+// Delete account
+AuthRouter.delete("/account", auth, deleteAccount);
+
 // Logout
 AuthRouter.post("/logout", auth, logout);
 
