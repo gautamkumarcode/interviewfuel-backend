@@ -13,6 +13,7 @@ import {
 	updateProfile,
 	uploadAvatar,
 } from "../controller/auth-controller.js";
+import { oauthLogin } from "../controller/oauth-controller.js";
 import { requireRole } from "../middleware/adminAuth.js";
 import { auth } from "../middleware/auth.js";
 import { refreshTokenMiddleware } from "../middleware/refreshToken.js";
@@ -68,6 +69,9 @@ AuthRouter.post(
 	],
 	login
 );
+
+// OAuth Login/Register
+AuthRouter.post("/oauth", oauthLogin);
 
 // Get current user
 AuthRouter.get("/me", auth, getMe);

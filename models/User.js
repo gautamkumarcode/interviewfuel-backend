@@ -33,9 +33,21 @@ const userSchema = new mongoose.Schema(
 		},
 		password: {
 			type: String,
-			required: [true, "Password is required"],
+			required: function () {
+				// Password is only required if not using OAuth
+				return !this.oauthProvider;
+			},
 			minlength: [6, "Password must be at least 6 characters"],
 			select: false,
+		},
+		oauthProvider: {
+			type: String,
+			enum: ["google", "github", null],
+			default: null,
+		},
+		oauthId: {
+			type: String,
+			default: null,
 		},
 		avatar: {
 			type: String,
