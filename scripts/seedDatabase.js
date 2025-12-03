@@ -6,6 +6,7 @@ import Question from "../models/Question.js";
 import User from "../models/User.js";
 
 dotenv.config();
+
 // Database connection
 const connectDB = async () => {
 	try {
@@ -39,27 +40,78 @@ const seedCategories = async () => {
 		const frontend = await Category.create({
 			name: "Frontend",
 			slug: "frontend",
-			description: "Frontend development technologies",
+			description: "Frontend development technologies and frameworks",
 			icon: "monitor",
 			color: "#3B82F6",
+			order: 1,
 		});
 
 		const backend = await Category.create({
 			name: "Backend",
 			slug: "backend",
-			description: "Backend development technologies",
+			description:
+				"Backend development technologies and server-side programming",
 			icon: "server",
 			color: "#10B981",
+			order: 2,
+		});
+
+		const database = await Category.create({
+			name: "Database",
+			slug: "database",
+			description: "Database management and query languages",
+			icon: "database",
+			color: "#F59E0B",
+			order: 3,
+		});
+
+		const dataStructures = await Category.create({
+			name: "Data Structures",
+			slug: "data-structures",
+			description: "Fundamental data structures and algorithms",
+			icon: "code",
+			color: "#8B5CF6",
+			order: 4,
+		});
+
+		const systemDesign = await Category.create({
+			name: "System Design",
+			slug: "system-design",
+			description: "System architecture and design patterns",
+			icon: "layout",
+			color: "#EF4444",
+			order: 5,
 		});
 
 		// Frontend subcategories
+		const javascript = await Category.create({
+			name: "JavaScript",
+			slug: "javascript",
+			description: "Core JavaScript concepts and ES6+ features",
+			icon: "javascript",
+			color: "#F7DF1E",
+			parentCategory: frontend._id,
+			order: 1,
+		});
+
 		const react = await Category.create({
 			name: "React",
 			slug: "react",
-			description: "React.js library",
+			description: "React.js library and ecosystem",
 			icon: "react",
 			color: "#61DAFB",
 			parentCategory: frontend._id,
+			order: 2,
+		});
+
+		const vue = await Category.create({
+			name: "Vue.js",
+			slug: "vue",
+			description: "Vue.js framework",
+			icon: "vue",
+			color: "#42B883",
+			parentCategory: frontend._id,
+			order: 3,
 		});
 
 		const angular = await Category.create({
@@ -69,16 +121,28 @@ const seedCategories = async () => {
 			icon: "angular",
 			color: "#DD0031",
 			parentCategory: frontend._id,
+			order: 4,
+		});
+
+		const css = await Category.create({
+			name: "CSS",
+			slug: "css",
+			description: "CSS styling and modern layout techniques",
+			icon: "css",
+			color: "#1572B6",
+			parentCategory: frontend._id,
+			order: 5,
 		});
 
 		// React subcategories
 		const reactHooks = await Category.create({
 			name: "React Hooks",
 			slug: "react-hooks",
-			description: "React Hooks concepts",
+			description: "React Hooks and state management",
 			icon: "anchor",
 			color: "#61DAFB",
 			parentCategory: react._id,
+			order: 1,
 		});
 
 		const reactRouter = await Category.create({
@@ -88,16 +152,28 @@ const seedCategories = async () => {
 			icon: "navigation",
 			color: "#61DAFB",
 			parentCategory: react._id,
+			order: 2,
+		});
+
+		const reactPerformance = await Category.create({
+			name: "React Performance",
+			slug: "react-performance",
+			description: "React optimization and performance",
+			icon: "zap",
+			color: "#61DAFB",
+			parentCategory: react._id,
+			order: 3,
 		});
 
 		// Backend subcategories
 		const nodejs = await Category.create({
 			name: "Node.js",
 			slug: "nodejs",
-			description: "Node.js runtime",
+			description: "Node.js runtime and core modules",
 			icon: "nodejs",
 			color: "#68A063",
 			parentCategory: backend._id,
+			order: 1,
 		});
 
 		const express = await Category.create({
@@ -107,6 +183,99 @@ const seedCategories = async () => {
 			icon: "express",
 			color: "#000000",
 			parentCategory: backend._id,
+			order: 2,
+		});
+
+		const restApi = await Category.create({
+			name: "REST API",
+			slug: "rest-api",
+			description: "RESTful API design and best practices",
+			icon: "api",
+			color: "#10B981",
+			parentCategory: backend._id,
+			order: 3,
+		});
+
+		const authentication = await Category.create({
+			name: "Authentication",
+			slug: "authentication",
+			description: "Authentication and authorization strategies",
+			icon: "lock",
+			color: "#F59E0B",
+			parentCategory: backend._id,
+			order: 4,
+		});
+
+		// Database subcategories
+		const mongodb = await Category.create({
+			name: "MongoDB",
+			slug: "mongodb",
+			description: "MongoDB NoSQL database",
+			icon: "mongodb",
+			color: "#47A248",
+			parentCategory: database._id,
+			order: 1,
+		});
+
+		const sql = await Category.create({
+			name: "SQL",
+			slug: "sql",
+			description: "SQL and relational databases",
+			icon: "sql",
+			color: "#4479A1",
+			parentCategory: database._id,
+			order: 2,
+		});
+
+		const postgresql = await Category.create({
+			name: "PostgreSQL",
+			slug: "postgresql",
+			description: "PostgreSQL database",
+			icon: "postgresql",
+			color: "#336791",
+			parentCategory: database._id,
+			order: 3,
+		});
+
+		// Data Structures subcategories
+		const arrays = await Category.create({
+			name: "Arrays",
+			slug: "arrays",
+			description: "Array data structure and operations",
+			icon: "array",
+			color: "#8B5CF6",
+			parentCategory: dataStructures._id,
+			order: 1,
+		});
+
+		const linkedLists = await Category.create({
+			name: "Linked Lists",
+			slug: "linked-lists",
+			description: "Linked list data structure",
+			icon: "link",
+			color: "#8B5CF6",
+			parentCategory: dataStructures._id,
+			order: 2,
+		});
+
+		const trees = await Category.create({
+			name: "Trees",
+			slug: "trees",
+			description: "Tree data structures and traversal",
+			icon: "tree",
+			color: "#8B5CF6",
+			parentCategory: dataStructures._id,
+			order: 3,
+		});
+
+		const graphs = await Category.create({
+			name: "Graphs",
+			slug: "graphs",
+			description: "Graph data structures and algorithms",
+			icon: "graph",
+			color: "#8B5CF6",
+			parentCategory: dataStructures._id,
+			order: 4,
 		});
 
 		console.log("Categories seeded successfully");
@@ -114,15 +283,32 @@ const seedCategories = async () => {
 		return {
 			frontend,
 			backend,
+			database,
+			dataStructures,
+			systemDesign,
+			javascript,
 			react,
+			vue,
 			angular,
+			css,
 			reactHooks,
 			reactRouter,
+			reactPerformance,
 			nodejs,
 			express,
+			restApi,
+			authentication,
+			mongodb,
+			sql,
+			postgresql,
+			arrays,
+			linkedLists,
+			trees,
+			graphs,
 		};
 	} catch (err) {
 		console.error("Error seeding categories:", err.message);
+		throw err;
 	}
 };
 
@@ -130,15 +316,13 @@ const seedCategories = async () => {
 const seedUsers = async () => {
 	try {
 		const hashedPassword = await bcrypt.hash("password123", 12);
-
-		// Generate unique usernames that meet validation requirements
 		const timestamp = Date.now();
-		const adminUsername = `admin_${timestamp}`.slice(0, 20); // Ensure maxlength
-		const regularUsername = `user_${timestamp}`.slice(0, 20); // Ensure maxlength
+		const adminUsername = `admin_${timestamp}`.slice(0, 20);
+		const regularUsername = `user_${timestamp}`.slice(0, 20);
 
 		const adminUser = await User.create({
 			name: "Admin User",
-			email: `admin_${timestamp}@example.com`, // Also ensure unique email
+			email: `admin_${timestamp}@example.com`,
 			userName: adminUsername,
 			password: hashedPassword,
 			role: "admin",
@@ -147,7 +331,7 @@ const seedUsers = async () => {
 
 		const regularUser = await User.create({
 			name: "Regular User",
-			email: `user_${timestamp}@example.com`, // Unique email
+			email: `user_${timestamp}@example.com`,
 			userName: regularUsername,
 			password: hashedPassword,
 			bio: "I'm a regular user learning web development",
@@ -160,111 +344,3 @@ const seedUsers = async () => {
 		throw err;
 	}
 };
-
-// Seed questions
-const seedQuestions = async (categories, users) => {
-	try {
-		// React Hooks questions
-		const reactHooksQuestion1 = await Question.create({
-			title: "What is useState hook in React?",
-			content: "Explain the useState hook and how to use it",
-			category: categories.reactHooks._id,
-			difficulty: "Easy",
-			tags: ["react", "hooks", "usestate"],
-			richAnswer:
-				"The `useState` hook is a built-in React hook that allows you to add state to functional components...",
-			solutions: [
-				{
-					title: "Basic useState example",
-					language: "javascript",
-					code: "const [count, setCount] = useState(0);",
-					explanation:
-						"This initializes a state variable 'count' with initial value 0",
-					timeComplexity: "O(1)",
-					spaceComplexity: "O(1)",
-				},
-			],
-			hints: [
-				{
-					order: 1,
-					content:
-						"useState returns an array with two values: the current state and a function to update it",
-				},
-			],
-			author: users.adminUser._id,
-			slug: "what-is-usestate-hook-in-react",
-		});
-
-		const reactHooksQuestion2 = await Question.create({
-			title: "How does useEffect differ from componentDidMount?",
-			content:
-				"Compare useEffect hook with class component's componentDidMount",
-			category: categories.reactHooks._id,
-			difficulty: "Medium",
-			tags: ["react", "hooks", "useeffect"],
-			richAnswer:
-				"The `useEffect` hook serves a similar purpose to `componentDidMount`, `componentDidUpdate`, and `componentWillUnmount` combined...",
-			solutions: [
-				{
-					title: "useEffect vs lifecycle methods",
-					language: "javascript",
-					code: "useEffect(() => {\n  // Your effect here\n  return () => {\n    // Cleanup\n  };\n}, [dependencies]);",
-					explanation:
-						"The empty dependency array makes it similar to componentDidMount",
-					timeComplexity: "O(1)",
-					spaceComplexity: "O(1)",
-				},
-			],
-			author: users.regularUser._id,
-			slug: "how-does-useeffect-differ-from-componentdidmount",
-		});
-
-		// React Router questions
-		const reactRouterQuestion = await Question.create({
-			title: "How to implement protected routes in React Router?",
-			content: "Explain how to create routes that require authentication",
-			category: categories.reactRouter._id,
-			difficulty: "Medium",
-			tags: ["react", "router", "authentication"],
-			richAnswer:
-				"To implement protected routes in React Router, you can create a wrapper component that checks for authentication...",
-			solutions: [
-				{
-					title: "ProtectedRoute component",
-					language: "javascript",
-					code: "const ProtectedRoute = ({ children }) => {\n  const { user } = useAuth();\n  \n  if (!user) {\n    return <Navigate to='/login' />;\n  }\n  \n  return children;\n};",
-					explanation:
-						"This component checks for a user and redirects to login if not authenticated",
-					timeComplexity: "O(1)",
-					spaceComplexity: "O(1)",
-				},
-			],
-			author: users.adminUser._id,
-			slug: "how-to-implement-protected-routes-in-react-router",
-		});
-
-		console.log("Questions seeded successfully");
-	} catch (err) {
-		console.error("Error seeding questions:", err.message);
-	}
-};
-
-// Main seeding function
-const seedDatabase = async () => {
-	try {
-		await connectDB();
-		await clearDatabase();
-
-		const categories = await seedCategories();
-		const users = await seedUsers();
-		await seedQuestions(categories, users);
-
-		console.log("Database seeding completed successfully");
-		process.exit(0);
-	} catch (err) {
-		console.error("Database seeding failed:", err.message);
-		process.exit(1);
-	}
-};
-
-seedDatabase();

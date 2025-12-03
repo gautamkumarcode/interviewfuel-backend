@@ -9,6 +9,11 @@
 		"dev": "nodemon server.js",
 		"test": "jest",
 		"seed": "node scripts/seedDatabase.js",
+		"seed:questions": "node scripts/seedQuestions.js",
+		"seed:all-questions": "node scripts/seedAllQuestions.js",
+		"delete:generated-questions": "node scripts/deleteGeneratedQuestions.js",
+		"seed:subcategories": "node scripts/addSubcategories.js",
+		"seed:more-categories": "node scripts/addMoreCategories.js",
 		"seed:admin": "node scripts/seedAdmin.js",
 		"check-env": "node check-env.js",
 		"test-practice": "node test-practice-flow.js"

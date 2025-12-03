@@ -3,6 +3,7 @@ export const SUCCESS_MESSAGE = {
 	USER_LOGGED_IN: "User logged in successfully.",
 	USER_UPDATED: "User updated successfully.",
 	USER_DELETED: "User deleted successfully.",
+	USER_CREATED: "User created successfully.",
 	USER_VERIFIED: "User verified successfully.",
 	USER_PASSWORD_RESET: "Password reset successfully.",
 	USER_PASSWORD_CHANGED: "Password changed successfully.",
