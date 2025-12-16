@@ -5,6 +5,7 @@ import {
 	generateAccessToken,
 	generateRefreshToken,
 } from "../services/jwt-token-services.js";
+import { generateUsernameFromEmail } from "../utils/username-generator.js";
 
 const sendTokens = (res, user, message, statusCode = 200) => {
 	const accessToken = generateAccessToken(user._id);
@@ -74,8 +75,8 @@ export const oauthLogin = async (req, res) => {
 				}
 				await user.save();
 			} else {
-				// Create new user
-				const username = email.split("@")[0] + Math.floor(Math.random() * 1000);
+				// Create new user with unique InterviewFuel themed username
+				const username = await generateUsernameFromEmail(email);
 				user = new User({
 					name,
 					email,
@@ -101,6 +102,16 @@ export const oauthLogin = async (req, res) => {
 		sendTokens(res, user, SUCCESS_MESSAGE.USER_LOGGED_IN, 200);
 	} catch (error) {
 		console.error("OAuth login error:", error);
+
+		// Handle duplicate key error specifically
+		if (error.code === 11000) {
+			const field = Object.keys(error.keyPattern)[0];
+			return res.status(409).json({
+				success: false,
+				message: `A user with this ${field} already exists. Please try again.`,
+			});
+		}
+
 		res.status(500).json({
 			success: false,
 			message: ERROR_MESSAGES.SERVER_ERROR,

@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema(
@@ -125,6 +126,19 @@ const userSchema = new mongoose.Schema(
 // Virtual for user's full profile URL
 userSchema.virtual("profileUrl").get(function () {
 	return `/users/${this.username}`;
+});
+
+// Pre-save middleware to ensure unique username
+userSchema.pre("save", async function (next) {
+	// Only generate username if it's a new user and username matches default pattern or starts with 'user'
+	if (this.isNew && this.userName && this.userName.startsWith("user")) {
+		const prefixes = ["ifuel", "fuel", "coder", "dev", "ace", "pro"];
+		const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
+		const timestamp = Date.now().toString().slice(-6);
+		const randomStr = crypto.randomBytes(2).toString("hex");
+		this.userName = `${prefix}${timestamp}${randomStr}`;
+	}
+	next();
 });
 
 // Pre-save middleware to hash password

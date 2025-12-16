@@ -6,6 +6,7 @@ import {
 	generateAccessToken,
 	generateRefreshToken,
 } from "../services/jwt-token-services.js";
+import { generateUsernameFromEmail } from "../utils/username-generator.js";
 
 const sendTokens = (res, user, message, statusCode = 200, minimal = false) => {
 	const accessToken = generateAccessToken(user._id);
@@ -63,8 +64,11 @@ export const register = async (req, res) => {
 
 		const { name, email, username, password, userRole } = req.body;
 
+		// Generate unique username if not provided
+		const finalUsername = username || (await generateUsernameFromEmail(email));
+
 		const existingUser = await User.findOne({
-			$or: [{ email }, { username }],
+			$or: [{ email }, { userName: finalUsername }],
 		});
 
 		if (existingUser) {
@@ -77,12 +81,29 @@ export const register = async (req, res) => {
 			});
 		}
 
-		const user = new User({ name, email, username, password, role: userRole });
+		const user = new User({
+			name,
+			email,
+			userName: finalUsername,
+			password,
+			role: userRole,
+		});
 		await user.save();
 
 		sendTokens(res, user, SUCCESS_MESSAGE.USER_REGISTERED, 201);
 	} catch (error) {
 		console.error("Registration error:", error);
+
+		// Handle duplicate key error specifically
+		if (error.code === 11000) {
+			const field = Object.keys(error.keyPattern)[0];
+			const fieldName = field === "userName" ? "username" : field;
+			return res.status(409).json({
+				success: false,
+				message: `This ${fieldName} is already taken. Please try a different one.`,
+			});
+		}
+
 		res
 			.status(500)
 			.json({ success: false, message: ERROR_MESSAGES.SERVER_ERROR });
