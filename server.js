@@ -18,6 +18,7 @@ import AchievementRouter from "./routes/achievements.js";
 import AdminUserRouter from "./routes/admin-users.js";
 import AnalyticsRouter from "./routes/analytics.js";
 import AuthRouter from "./routes/auth.js";
+import BlogRouter from "./routes/blogs.js";
 import CategoriesRouter from "./routes/categories.js";
 import ContributionRoutes from "./routes/contributions.js";
 import PracticeRouter from "./routes/practice.js";
@@ -98,6 +99,7 @@ app.use("/api/admin/users", AdminUserRouter);
 app.use("/api/analytics", AnalyticsRouter);
 app.use("/api/stats", StatsRouter);
 app.use("/api/search", SearchRouter);
+app.use("/api/blogs", BlogRouter);
 app.use("/api", ContributionRoutes);
 
 // Fallback route for undefined routes

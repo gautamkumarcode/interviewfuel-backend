@@ -92,6 +92,18 @@ const userSchema = new mongoose.Schema(
 			totalSessions: { type: Number, default: 0 },
 			favoriteCategory: { type: String, default: "" },
 		},
+		likedBlogs: [
+			{
+				type: mongoose.Schema.Types.ObjectId,
+				ref: "BlogPost",
+			},
+		],
+		bookmarkedBlogs: [
+			{
+				type: mongoose.Schema.Types.ObjectId,
+				ref: "BlogPost",
+			},
+		],
 		achievements: [
 			{
 				achievementId: {
