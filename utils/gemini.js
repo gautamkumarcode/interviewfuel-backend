@@ -331,12 +331,15 @@ export const evaluateAnswer = async (qaList) => {
 			(item) =>
 				item.hasOwnProperty("question") &&
 				item.hasOwnProperty("userAnswer") &&
+				item.hasOwnProperty("isCorrect") &&
 				item.hasOwnProperty("feedback") &&
 				item.hasOwnProperty("score") &&
-				typeof item.score === "number"
+				typeof item.score === "number" &&
+				typeof item.isCorrect === "boolean"
 		);
 
 		if (!isValidResponse) {
+			console.error("AI response validation failed - missing required fields");
 			return null;
 		}
 
