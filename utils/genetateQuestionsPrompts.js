@@ -11,14 +11,14 @@ Generate ${count} ${difficulty} interview questions for "${topic}".
 ${
 	isCustomTopic
 		? `
-🎯 CUSTOM TOPIC INSTRUCTIONS:
+ CUSTOM TOPIC INSTRUCTIONS:
 - This is a user-specified custom topic: "${topic}"
 - Create relevant, practical interview questions for this specific domain
 - Ensure questions are appropriate for technical interviews
 - Focus on real-world applications and problem-solving
 `
 		: `
-📚 CATEGORY-BASED INSTRUCTIONS:
+ CATEGORY-BASED INSTRUCTIONS:
 - This topic is from our curated categories
 - Create standard technical interview questions
 - Follow established patterns for this domain

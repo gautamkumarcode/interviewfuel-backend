@@ -4,7 +4,6 @@ import jwt from "jsonwebtoken";
 dotenv.config();
 
 /**
- * Validate and decode a JWT token
  * @param {string} token - The JWT token to validate
  * @returns {Object} - Validation result with decoded data or error
  */
