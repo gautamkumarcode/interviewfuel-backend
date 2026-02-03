@@ -3,11 +3,14 @@ import User from "../models/User.js";
 
 const optionalAuth = async (req, res, next) => {
 	try {
-		const token = req.header("Authorization")?.replace("Bearer ", "");
+		const authHeader = req.header("Authorization");
+		const token = authHeader?.replace("Bearer ", "");
 
 		if (token) {
 			const decoded = jwt.verify(token, process.env.JWT_SECRET);
-			const user = await User.findById(decoded.userId).select("-password");
+			// Support both 'id' and 'userId' for backwards compatibility
+			const userId = decoded.id || decoded.userId;
+			const user = await User.findById(userId).select("-password");
 
 			if (user && user.isActive) {
 				req.user = user;

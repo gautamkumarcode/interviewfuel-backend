@@ -87,6 +87,7 @@ export const getAllBlogs = async (req, res) => {
 export const getBlogBySlug = async (req, res) => {
 	try {
 		const { slug } = req.params;
+		const userId = req.user?._id; // From optional auth middleware
 
 		const blog = await BlogPost.findOne({ slug })
 			.populate("author", "userName name profilePicture bio")
@@ -112,11 +113,33 @@ export const getBlogBySlug = async (req, res) => {
 			.populate("userId", "username fullName profilePicture")
 			.sort("-createdAt");
 
+		// Check if user has liked/bookmarked the blog
+		let isLiked = false;
+		let isBookmarked = false;
+
+		if (userId) {
+			const user = await User.findById(userId).select(
+				"likedBlogs bookmarkedBlogs",
+			);
+			if (user) {
+				isLiked =
+					user.likedBlogs?.some(
+						(blogId) => blogId.toString() === blog._id.toString(),
+					) ?? false;
+				isBookmarked =
+					user.bookmarkedBlogs?.some(
+						(blogId) => blogId.toString() === blog._id.toString(),
+					) ?? false;
+			}
+		}
+
 		res.status(200).json({
 			success: true,
 			data: {
 				blog,
 				comments,
+				isLiked,
+				isBookmarked,
 			},
 		});
 	} catch (error) {
@@ -291,7 +314,7 @@ export const likeBlog = async (req, res) => {
 
 		// Check if already liked
 		const likedIndex = user.likedBlogs?.findIndex(
-			(blogId) => blogId.toString() === id
+			(blogId) => blogId.toString() === id,
 		);
 
 		if (likedIndex > -1) {
@@ -345,7 +368,7 @@ export const bookmarkBlog = async (req, res) => {
 
 		// Check if already bookmarked
 		const bookmarkedIndex = user.bookmarkedBlogs?.findIndex(
-			(blogId) => blogId.toString() === id
+			(blogId) => blogId.toString() === id,
 		);
 
 		if (bookmarkedIndex > -1) {
